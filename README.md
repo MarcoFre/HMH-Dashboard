@@ -26,9 +26,10 @@ Le stanze e le entità vengono costruite dinamicamente dal catalogo Home Assista
 | `HA_Dashboard_Sunton.yaml` | Sunton ESP32-8048S070 |
 | `HA_Dashboard_Waveshare.yaml` | Waveshare ESP32-S3-Touch-LCD-7 V1, 800×480 |
 
-**[Link Amazon affiliato HackMyHome](https://link.amazon/B0hEK8Jso)**
+- **[Amazon — link affiliato HackMyHome](https://link.amazon/B0hEK8Jso)**
+- **[Waveshare ESP32-S3-Touch-LCD-7 — link affiliato HackMyHome](https://www.waveshare.com/product/esp32-related/boards-kits/esp32-s3/esp32-s3-touch-lcd-7.htm?aff_id=HackMyHome)**
 
-Il collegamento è affiliato. Verifica modello e variante nella scheda prodotto prima dell'acquisto.
+I collegamenti sono affiliati. Verifica modello e variante nella scheda prodotto prima dell'acquisto.
 
 ## Struttura
 
