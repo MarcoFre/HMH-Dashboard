@@ -1,0 +1,81 @@
+# Copiare in /config/packages/hmh_dashboard_calendario.yaml e abilitare
+# homeassistant: packages: !include_dir_named packages  nella configuration.yaml.
+# Richiede label Home Assistant esatta: HMH Dashboard Calendario
+# Il calendario viene recuperato tramite calendar.get_events, NON dal solo stato calendar.*.
+
+template:
+  - trigger:
+      - platform: time_pattern
+        minutes: "/1"
+      - platform: homeassistant
+        event: start
+    sensor:
+      - name: HMH Dashboard Calendar Status
+        unique_id: hmh_dashboard_calendar_status
+        state: >-
+          {% set found = label_entities('HMH Dashboard Calendario')
+            | select('match', '^calendar.') | list %}
+          {{ 'on' if found | count > 0 else 'off' }}
+        attributes:
+          calendar_entities: >-
+            {{ label_entities('HMH Dashboard Calendario')
+               | select('match', '^calendar.') | list | join(',') }}
+
+automation:
+  - id: hmh_dashboard_calendar_requests
+    alias: 'HMH Dashboard: calendario - richieste ESP32'
+    mode: queued
+    max: 8
+    triggers:
+      - trigger: event
+        event_type: esphome.hmh_dashboard_calendar_request
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ (label_entities('HMH Dashboard Calendario')
+             | select('match','^calendar.') | list | count) > 0 }}
+    actions:
+      - variables:
+          cal_ids: >-
+            {{ label_entities('HMH Dashboard Calendario')
+               | select('match', '^calendar.') | list | join(',') }}
+          yyyy: "{{ trigger.event.data.year | int(0) }}"
+          mm: "{{ trigger.event.data.month | int(0) }}"
+          display: "{{ trigger.event.data.device | default('') }}"
+      - condition: template
+        value_template: "{{ yyyy | int > 2000 and mm | int >= 1 and mm | int <= 12 }}"
+      - action: calendar.get_events
+        target:
+          entity_id: "{{ cal_ids }}"
+        data:
+          start_date_time: "{{ '%04d-%02d-01 00:00:00' | format(yyyy | int, mm | int) }}"
+          duration:
+            days: 32
+        response_variable: cal_response
+      - variables:
+          payload: >-
+            {% set ns = namespace(items=[]) %}
+            {% for cal, result in cal_response.items() %}
+              {% for ev in result.get('events', []) %}
+                {% set start = ev.get('start', '') | string %}
+                {% set finish = ev.get('end', '') | string %}
+                {% set day_event = 'T' not in start and ' ' not in start %}
+                {% set item = dict(s=start, e=finish,
+                  t=ev.get('summary','Evento'), c=state_attr(cal,'friendly_name') or cal,
+                  a=day_event) %}
+                {% set ns.items = ns.items + [item] %}
+              {% endfor %}
+            {% endfor %}
+            {{ dict(year=yyyy|int, month=mm|int,
+                  events=ns.items | sort(attribute='s')) | to_json }}
+      - choose:
+          - conditions: "{{ display == 'sunton-7' }}"
+            sequence:
+              - action: esphome.sunton_7_calendar_payload
+                data:
+                  payload: "{{ payload }}"
+          - conditions: "{{ display == 'hmh-waveshare-7' }}"
+            sequence:
+              - action: esphome.hmh_waveshare_7_calendar_payload
+                data:
+                  payload: "{{ payload }}"

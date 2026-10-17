@@ -1,0 +1,9 @@
+**/secrets.yaml
+**/.esphome/
+**/.pioenvs/
+**/.piolibdeps/
+**/__pycache__/
+*.pyc
+*.log
+*.bak*
+.DS_Store

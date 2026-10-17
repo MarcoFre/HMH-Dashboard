@@ -1,0 +1,12 @@
+# Entry point Sunton - keep this, common.yaml, hardware_sunton.yaml together
+substitutions:
+  ip: "192.168.31.242"
+
+packages:
+  common: !include common.yaml
+  hardware: !include hardware_sunton.yaml
+
+# Unique node identity (avoids conflict with Waveshare).
+esphome:
+  name: sunton-7
+  friendly_name: HMH Dashboard Sunton

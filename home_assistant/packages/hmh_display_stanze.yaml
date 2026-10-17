@@ -1,0 +1,5 @@
+# Sostituisce /config/packages/hmh_display_stanze.yaml.
+# Richiede /config/custom_components/hmh_dashboard/ installato dallo ZIP.
+sensor:
+  - platform: hmh_dashboard
+    label: "HA Dashboard"

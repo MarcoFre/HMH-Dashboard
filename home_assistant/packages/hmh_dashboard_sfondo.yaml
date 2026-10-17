@@ -1,0 +1,29 @@
+# Package Home Assistant (NON un file ESPHome).
+# Etichettare direttamente l'entità image.* con HMH Dashboard Sfondo.
+template:
+  - triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        seconds: "/30"
+      - trigger: event
+        event_type: entity_registry_updated
+      - trigger: event
+        event_type: label_registry_updated
+    sensor:
+      - name: HMH Dashboard Sfondo
+        unique_id: hmh_dashboard_sfondo
+        state: >-
+          {% set images = label_entities('HMH Dashboard Sfondo') | select('match', '^image\.') | sort | list %}
+          {{ images | first | default('nessuna', true) }}
+        attributes:
+          url: >-
+            {% set images = label_entities('HMH Dashboard Sfondo') | select('match', '^image\.') | sort | list %}
+            {% set ns = namespace(url='') %}
+            {% for entity in images %}
+              {% set picture = state_attr(entity, 'entity_picture') %}
+              {% if not ns.url and states(entity) not in ['unavailable', 'unknown'] and picture %}
+                {% set ns.url = picture %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.url }}

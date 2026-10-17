@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="390" viewBox="0 0 1000 390" role="img" aria-label="Home Assistant fornisce dati alla logica ESPHome comune, condivisa da Sunton e Waveshare">
+<rect width="1000" height="390" rx="24" fill="#0b1220"/>
+<g font-family="Arial,sans-serif" text-anchor="middle">
+<text x="500" y="48" fill="#ffffff" font-size="27">Una dashboard, due hardware</text>
+<g stroke="#22d3ee" stroke-width="3" fill="none"><path d="M300 205H380M650 205H700V145H730M700 205V285H730"/></g>
+<g fill="#17273c" stroke="#334155"><rect x="35" y="140" width="265" height="130" rx="16"/><rect x="380" y="140" width="270" height="130" rx="16"/><rect x="730" y="100" width="235" height="90" rx="16"/><rect x="730" y="240" width="235" height="90" rx="16"/></g>
+<g fill="#ffffff" font-size="23"><text x="167" y="183">Home Assistant</text><text x="515" y="183">ESPHome + LVGL</text><text x="847" y="137">Sunton</text><text x="847" y="277">Waveshare</text></g>
+<g fill="#b7c8dc" font-size="16"><text x="167" y="217">Catalogo · sfondo · calendari</text><text x="167" y="244">Integrazione + package</text><text x="515" y="217">common.yaml</text><text x="515" y="244">room_sidebar.h</text><text x="847" y="165">hardware_sunton.yaml</text><text x="847" y="305">hardware_waveshare.yaml</text></g></g></svg>
