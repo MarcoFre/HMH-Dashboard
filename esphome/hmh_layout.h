@@ -32,7 +32,7 @@ struct HmhLayout {
   int size(int reference) const { return std::max(1, static_cast<int>(std::lround(reference * scale()))); }
 
   // Absolute positions take the full axis; sizes retain a uniform shape.
-  int sidebar_width() const { return size(54); }
+  int sidebar_width() const { return size(60); }
   int status_height() const { return y(54); }
   int content_left() const { return sidebar_width() + size(14); }
   int content_width() const { return std::max(1, width - content_left() - size(12)); }
