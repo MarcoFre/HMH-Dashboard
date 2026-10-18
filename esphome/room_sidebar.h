@@ -1298,7 +1298,7 @@ class RoomDevices {
     for(const auto &e:entities_) if(e.chip && matches_view(e)) selected.push_back(&e);
     std::stable_sort(selected.begin(),selected.end(),[](const Entity *a,const Entity *b){return hmh_widget_layout.entity_rank(a->id)<hmh_widget_layout.entity_rank(b->id);});
     if(selected.empty()) {
-      lv_obj_set_y(list_,120);lv_obj_set_height(list_,348);
+      lv_obj_set_y(list_,76);lv_obj_set_height(list_,392);
       if(chip_row_) lv_obj_add_flag(chip_row_,LV_OBJ_FLAG_HIDDEN);
       lv_obj_clear_flag(hint_,LV_OBJ_FLAG_HIDDEN);return;
     }
@@ -1308,12 +1308,12 @@ class RoomDevices {
       lv_obj_set_style_bg_opa(chip_row_,LV_OPA_TRANSP,0);
       lv_obj_set_scroll_dir(chip_row_,LV_DIR_VER);lv_obj_set_scrollbar_mode(chip_row_,LV_SCROLLBAR_MODE_OFF);
     }
-    lv_obj_set_pos(chip_row_,lv_obj_get_x(list_)+4,72);
+    lv_obj_set_pos(chip_row_,lv_obj_get_x(list_)+4,62);
     const int columns=layout_width_>600?3:2;
     const int rows=(selected.size()+columns-1)/columns;
-    const int list_y=std::min(376,120+rows*46);
+    const int list_y=std::min(376,76+rows*46);
     lv_obj_set_y(list_,list_y);lv_obj_set_height(list_,480-list_y-12);
-    lv_obj_set_size(chip_row_,layout_width_-8,std::min(rows*46,list_y-76));
+    lv_obj_set_size(chip_row_,layout_width_-8,std::min(rows*46,list_y-66));
     lv_obj_clear_flag(chip_row_,LV_OBJ_FLAG_HIDDEN);lv_obj_add_flag(hint_,LV_OBJ_FLAG_HIDDEN);
     bool rebuild=force || selected.size()!=chips_.size();
     if(!rebuild) for(size_t i=0;i<selected.size();++i) if(selected[i]->id!=chips_[i].id || selected[i]->has_battery!=(chips_[i].battery.root!=nullptr)) {rebuild=true;break;}
@@ -1465,7 +1465,7 @@ class RoomDevices {
     if (!list_ || !visible_ || dragging_) return;
     if(area_=="@energy") {refresh_energy();return;}
     if(energy_view_) {energy_view_=false;lv_obj_set_y(hint_,128);force_rebuild=true;}
-    if(area_.rfind("@battery:",0)==0) {lv_obj_set_y(list_,120);lv_obj_set_height(list_,348);refresh_batteries(force_rebuild);return;}
+    if(area_.rfind("@battery:",0)==0) {lv_obj_set_y(list_,76);lv_obj_set_height(list_,392);refresh_batteries(force_rebuild);return;}
     if(battery_view_) {battery_cards_.clear();battery_view_=false;force_rebuild=true;}
     lv_obj_set_style_text_font(hint_,hmh_runtime_text_16,0);
     refresh_chips(force_rebuild);
@@ -1533,17 +1533,17 @@ class RoomDevices {
           bool closed = !categories && hmh_widget_layout.collapsed(area_, group);
           std::string caption = std::string(categories ? "" : closed ? "+ " : "- ") + title + " · " + std::to_string(count);
           auto *heading = make_label(list_, 2, layout_y, layout_width_ - 18, caption.c_str());
-          lv_obj_set_height(heading, 28);
+          lv_obj_set_height(heading, 24);
           lv_obj_set_style_text_color(heading, hmh_color(0x22D3EE), 0);
           if (!categories) {
             lv_obj_add_flag(heading, LV_OBJ_FLAG_CLICKABLE);
             lv_obj_add_event_cb(heading, layout_event, LV_EVENT_ALL, this);
           }
           headings_.push_back({group, heading});
-          layout_y += 32;
+          layout_y += 26;
           previous_section = group;
           row_height=92;
-          if(group==3) row_height=154; // Gaia sensors keep their values inside the cards.
+          if(group==3) row_height=116; // Gaia sensors keep their values inside the cards.
           if(group==10) {row_height=194;for(const auto *item:all_selected) if(section(*item)==10 && item->alarm_modes.size()>3) row_height=236;}
           for(const auto *item:all_selected) if(section(*item)==group && (tall_card(*item) || (categories && !is_contact(*item)))) {row_height=std::max(row_height,138);break;}
         }
@@ -1560,10 +1560,10 @@ class RoomDevices {
             auto *heading=make_label(list_,12,layout_y,layout_width_-30,caption.c_str());
             lv_obj_set_style_text_font(heading,hmh_runtime_text_20,0);
             lv_obj_set_style_text_color(heading,hmh_color(0xCBD5E1),0);
-            lv_obj_set_height(heading,30);
+            lv_obj_set_height(heading,25);
             lv_obj_add_flag(heading,LV_OBJ_FLAG_CLICKABLE);
             lv_obj_add_event_cb(heading,layout_event,LV_EVENT_ALL,this);
-            device_headings_.push_back({group,key,heading});layout_y+=34;
+            device_headings_.push_back({group,key,heading});layout_y+=27;
           }
         }
         if(hmh_widget_layout.device_closed(key)) continue;
@@ -1573,7 +1573,7 @@ class RoomDevices {
         card.obj = lv_btn_create(list_);
         lv_obj_set_pos(card.obj, column * (card_width + gap), layout_y);
         if (++column == columns) { column = 0; layout_y += row_height; }
-        lv_obj_set_size(card.obj,card_width,e.domain=="alarm_control_panel"?(e.alarm_modes.size()>3?224:182):is_contact(e)?80:(categories || tall_card(e) || e.domain=="sensor")?144:80);
+        lv_obj_set_size(card.obj,card_width,e.domain=="alarm_control_panel"?(e.alarm_modes.size()>3?224:182):is_contact(e)?80:(categories || tall_card(e) || e.domain=="sensor")?110:80);
         lv_obj_set_style_radius(card.obj, 16, 0);
         lv_obj_set_style_pad_all(card.obj, 0, 0);
         lv_obj_set_style_shadow_width(card.obj, 0, 0);
@@ -1607,11 +1607,11 @@ class RoomDevices {
         if (e.domain == "sensor" || e.domain == "binary_sensor") {
           // Gaia: compact sensor header, prominent value, no overlapping text.
           lv_obj_set_y(card.name, 10);
-          lv_obj_set_height(card.name, 48);
+          lv_obj_set_height(card.name, 42);
           lv_label_set_long_mode(card.name, LV_LABEL_LONG_DOT);
-          lv_obj_set_pos(card.status, 16, 65);
+          lv_obj_set_pos(card.status, 16, 52);
           lv_obj_set_width(card.status, card_width - 32);
-          lv_obj_set_height(card.status, 36);
+          lv_obj_set_height(card.status, 30);
           lv_obj_set_style_text_font(card.status, e.domain == "sensor" ? hmh_runtime_text_28 : hmh_runtime_text_20, 0);
           lv_obj_set_style_text_color(card.status, lv_color_hex(0xD6F3FF), 0);
           if (e.domain == "sensor") {
@@ -1619,7 +1619,7 @@ class RoomDevices {
             const bool barometer=(e.device_class=="atmospheric_pressure" || e.unit=="hPa" || e.unit=="mbar");
             if (percentage || barometer) {
               card.gaia_scale=lv_bar_create(card.obj);
-              lv_obj_set_pos(card.gaia_scale,16,130);
+              lv_obj_set_pos(card.gaia_scale,16,103);
               lv_obj_set_size(card.gaia_scale,card_width-32,4);
               lv_bar_set_range(card.gaia_scale,0,1000);
               lv_obj_set_style_radius(card.gaia_scale,LV_RADIUS_CIRCLE,LV_PART_MAIN);
@@ -1627,7 +1627,7 @@ class RoomDevices {
               lv_obj_set_style_bg_color(card.gaia_scale,lv_color_hex(0x29455B),LV_PART_MAIN);
               lv_obj_set_style_bg_color(card.gaia_scale,lv_color_hex(barometer?0x4DAEED:0x30C9DD),LV_PART_INDICATOR);
               if (barometer) {
-                card.gaia_scale_caption=make_label(card.obj,16,105,card_width-32,"Pressione relativa");
+                card.gaia_scale_caption=make_label(card.obj,16,82,card_width-32,"Pressione relativa");
                 lv_obj_set_style_text_font(card.gaia_scale_caption,hmh_chip_text_14,0);
                 lv_obj_set_style_text_color(card.gaia_scale_caption,lv_color_hex(0x91B3CA),0);
               }
