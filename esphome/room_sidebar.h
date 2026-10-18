@@ -1543,7 +1543,7 @@ class RoomDevices {
           layout_y += 26;
           previous_section = group;
           row_height=92;
-          if(group==3) row_height=116; // Gaia sensors keep their values inside the cards.
+          if(group==3) row_height=138; // Gaia sensors keep their values inside the cards.
           if(group==10) {row_height=194;for(const auto *item:all_selected) if(section(*item)==10 && item->alarm_modes.size()>3) row_height=236;}
           for(const auto *item:all_selected) if(section(*item)==group && (tall_card(*item) || (categories && !is_contact(*item)))) {row_height=std::max(row_height,138);break;}
         }
@@ -1573,7 +1573,7 @@ class RoomDevices {
         card.obj = lv_btn_create(list_);
         lv_obj_set_pos(card.obj, column * (card_width + gap), layout_y);
         if (++column == columns) { column = 0; layout_y += row_height; }
-        lv_obj_set_size(card.obj,card_width,e.domain=="alarm_control_panel"?(e.alarm_modes.size()>3?224:182):is_contact(e)?80:(categories || tall_card(e) || e.domain=="sensor")?110:80);
+        lv_obj_set_size(card.obj,card_width,e.domain=="alarm_control_panel"?(e.alarm_modes.size()>3?224:182):is_contact(e)?80:(categories || tall_card(e) || e.domain=="sensor")?130:80);
         lv_obj_set_style_radius(card.obj, 16, 0);
         lv_obj_set_style_pad_all(card.obj, 0, 0);
         lv_obj_set_style_shadow_width(card.obj, 0, 0);
@@ -1609,7 +1609,7 @@ class RoomDevices {
           lv_obj_set_y(card.name, 10);
           lv_obj_set_height(card.name, 42);
           lv_label_set_long_mode(card.name, LV_LABEL_LONG_DOT);
-          lv_obj_set_pos(card.status, 16, 52);
+          lv_obj_set_pos(card.status, 16, 69);
           lv_obj_set_width(card.status, card_width - 32);
           lv_obj_set_height(card.status, 30);
           lv_obj_set_style_text_font(card.status, e.domain == "sensor" ? hmh_runtime_text_28 : hmh_runtime_text_20, 0);
@@ -1619,7 +1619,7 @@ class RoomDevices {
             const bool barometer=(e.device_class=="atmospheric_pressure" || e.unit=="hPa" || e.unit=="mbar");
             if (percentage || barometer) {
               card.gaia_scale=lv_bar_create(card.obj);
-              lv_obj_set_pos(card.gaia_scale,16,103);
+              lv_obj_set_pos(card.gaia_scale,16,122);
               lv_obj_set_size(card.gaia_scale,card_width-32,4);
               lv_bar_set_range(card.gaia_scale,0,1000);
               lv_obj_set_style_radius(card.gaia_scale,LV_RADIUS_CIRCLE,LV_PART_MAIN);
@@ -1627,7 +1627,7 @@ class RoomDevices {
               lv_obj_set_style_bg_color(card.gaia_scale,lv_color_hex(0x29455B),LV_PART_MAIN);
               lv_obj_set_style_bg_color(card.gaia_scale,lv_color_hex(barometer?0x4DAEED:0x30C9DD),LV_PART_INDICATOR);
               if (barometer) {
-                card.gaia_scale_caption=make_label(card.obj,16,82,card_width-32,"Pressione relativa");
+                card.gaia_scale_caption=make_label(card.obj,16,100,card_width-32,"Pressione relativa");
                 lv_obj_set_style_text_font(card.gaia_scale_caption,hmh_chip_text_14,0);
                 lv_obj_set_style_text_color(card.gaia_scale_caption,lv_color_hex(0x91B3CA),0);
               }
@@ -1783,6 +1783,12 @@ class RoomDevices {
     else hint = std::to_string(all_selected.size()) + (all_selected.size() == 1 ? " dispositivo" : " dispositivi");
     if (!online_) hint += " | API offline";
     lv_label_set_text(hint_, hint.c_str());
+    // The count overlaps the category heading when the list starts high.
+    // Keep it accessible for empty/offline states; normal views use heading counts.
+    if (received_ && !all_selected.empty() && online_)
+      lv_obj_add_flag(hint_, LV_OBJ_FLAG_HIDDEN);
+    else
+      lv_obj_clear_flag(hint_, LV_OBJ_FLAG_HIDDEN);
     for (size_t i = 0; i < selected.size(); ++i) {
       auto &card = cards_[i];
       const auto &e = *selected[i];
