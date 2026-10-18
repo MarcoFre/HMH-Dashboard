@@ -4,6 +4,8 @@
 
 Questa guida descrive l'uso della versione multi-hardware per Sunton e Waveshare dopo l'installazione. Le impostazioni dell'interfaccia vengono gestite dal singolo display.
 
+> Le immagini sono quelle preparate per il video e fornite dall'autore. Nomi, valori e alcuni dettagli grafici possono differire dalla configurazione e dalla versione installata.
+
 ## 1. Come arrivano i dati al display
 
 ![Home Assistant, logica comune e due hardware](images/architettura.svg)
@@ -21,6 +23,10 @@ Home Assistant fornisce aree, entità e stati attraverso l'integrazione HMH Dash
 Per togliere l'entità dalla dashboard, rimuovi l'etichetta. Non è necessario cancellare l'entità da Home Assistant.
 
 **Attenzione al nome:** usa `HMH Dashboard`, con uno spazio tra le parole. La selezione del componente corrente usa questo nome anche se nel package storico compare `label: "HA Dashboard"`.
+
+![Temperatura media e umidità della casa](images/guida/temperatura-casa.png)
+
+*Esempio del risultato: il sensore etichettato viene visualizzato tra le entità della stanza.*
 
 ## 3. Scegliere e ordinare le stanze
 
@@ -49,6 +55,20 @@ Le pagine della versione pubblicata seguono questo ordine:
 
 I puntini di navigazione compaiono temporaneamente per indicare la pagina selezionata.
 
+![Stanza Cucina con gruppi di entità](images/guida/stanza-cucina.png)
+
+*La stanza selezionata è evidenziata nella barra laterale.*
+
+![Pagina categorie con le luci](images/guida/categorie-luci.png)
+
+*La pagina Categorie raccoglie entità dello stesso tipo, anche di stanze diverse.*
+
+### Controllare le batterie
+
+![Riepilogo delle batterie](images/guida/batterie.png)
+
+La pagina Batterie riporta i livelli disponibili. Un trattino o N/D indica che il valore non è disponibile, non che la batteria sia scarica.
+
 ## 5. Spostare i widget
 
 1. Apri la stanza interessata.
@@ -73,11 +93,37 @@ I controlli disponibili dipendono dal dominio e dalle capacità esposte dall'ent
 
 Perché i comandi funzionino, il display deve essere connesso a Home Assistant e autorizzato a eseguirne le azioni nelle opzioni dell'integrazione ESPHome.
 
+### Esempio: luce RGB
+
+![Regolazione della lampada](images/guida/luce-rgb.png)
+
+*Esempio del pannello di una luce compatibile: luminosità, canali RGB e comando di spegnimento.*
+
+### Esempio: antifurto e PIN
+
+![Scheda antifurto](images/guida/antifurto.png)
+
+Usa i comandi della scheda per richiedere una modalità supportata dall'allarme o il disinserimento. Lo stato visualizzato proviene da Home Assistant.
+
+![Tastierino PIN](images/guida/tastierino-pin.png)
+
+Quando viene richiesto un codice, inseriscilo sul tastierino e premi **Conferma**; **Annulla** chiude la richiesta. Il codice deve essere quello previsto dall'integrazione dell'allarme.
+
+### Esempio: purificatori
+
+![Categoria purificatori](images/guida/purificatori.png)
+
+*Esempio di gruppo con stato, velocità e misura PM2.5, quando disponibili dalle entità collegate.*
+
 ## 7. Aggiungere i chip
 
 Assegna l'etichetta **HMH Dashboard Chip** direttamente alle entità da mostrare come chip. Verifica anche la loro area.
 
 Un esempio è il sensore di una finestra: il chip permette di controllarne lo stato insieme alle altre informazioni della stanza. L'aspetto dipende dal tipo di entità.
+
+![Chip di finestre e ingresso nella stanza Salotto](images/guida/chip-salotto.png)
+
+*I chip raccolgono le informazioni compatte sopra i widget della stanza.*
 
 ## 8. Configurare il calendario
 
@@ -107,6 +153,10 @@ Per lo sfondo:
 
 Per una scelta univoca, applica l'etichetta a una sola immagine. Il package cerca le entità etichettate in ordine alfabetico e usa la prima immagine disponibile con un URL valido. Un semplice percorso a un file non sostituisce l'entità `image.*`.
 
+![Standby con orologio e meteo](images/guida/standby.png)
+
+*Immagine del video precedente alla modifica del colore: nella versione attuale data e prossimo evento sono bianchi. Questo esempio non mostra uno sfondo personalizzato né un evento.*
+
 ## 10. Tema e luminosità notturna
 
 In **Impostazioni → Aspetto** scegli **Chiaro**, **Scuro** o **Auto**, poi premi **Salva**.
@@ -133,6 +183,10 @@ I ruoli energetici previsti sono:
 
 Assegna un solo ruolo energetico a ciascun sensore. Usa sensori con unità coerenti di potenza o energia. Se lo storico presenta intervalli mancanti, questi non devono essere interpretati automaticamente come consumo zero.
 
+![Storico della temperatura](images/guida/storico-temperatura.png)
+
+*Esempio di storico: selezione del periodo, grafico, minimo, massimo e numero di campioni.*
+
 ## 12. Se qualcosa non compare
 
 | Problema | Controllo |
@@ -149,4 +203,4 @@ Assegna un solo ruolo energetico a ciascun sensore. Usa sensori con unità coere
 
 ---
 
-Guida basata sui sorgenti importati nel repository. Le immagini del video dedicate a etichette, selezione stanze, trascinamento e navigazione saranno aggiunte quando disponibili.
+Guida basata sui sorgenti importati nel repository e illustrata con una selezione delle immagini preparate per il video. Le immagini non raffigurano ogni gesto descritto: i passaggi senza immagine restano spiegati nel testo.
