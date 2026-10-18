@@ -2,6 +2,7 @@
 #include "esphome/core/helpers.h"
 #pragma once
 #include "lvgl.h"
+#include "hmh_layout.h"
 // lvgl.h does not export the image-cache API in this LVGL build.
 // LVGL 9.3+ keeps the cache instances in a dedicated subdirectory.
 #if __has_include("src/misc/cache/instance/lv_image_cache.h")
@@ -2168,7 +2169,8 @@ class RoomSidebar {
   bool categories_mode() const { return categories_; }
   bool navigation_area(const lv_point_t &point) const {
     if(!devices_) return false;
-    return point.x>=lv_obj_get_x(devices_) && point.x<800 && point.y>=54 && point.y<480;
+    const auto metrics=HmhLayout::current();
+    return point.x>=lv_obj_get_x(devices_) && point.x<metrics.width && point.y>=metrics.status_height() && point.y<metrics.height;
   }
   int page_mode() const {return calendar_?4:energy_?3:batteries_?2:categories_?1:0;}
   bool settings_open() const { return settings_; }
@@ -2248,15 +2250,16 @@ class RoomSidebar {
   void toggle_collapsed() {
     if (!sidebar_) return;
     collapsed_ = true; // Gaia: always show icons without expanded labels
-    const int sidebar_width = 54;
-    const int right_x = sidebar_width + 14;
-    const int right_width = 800 - right_x - 12;
+    const HmhLayout metrics = HmhLayout::current();
+    const int sidebar_width = metrics.sidebar_width();
+    const int right_x = metrics.content_left();
+    const int right_width = metrics.content_width();
     lv_obj_set_width(sidebar_, sidebar_width);
-    lv_obj_set_width(list_, sidebar_width - 16);
+    lv_obj_set_width(list_, sidebar_width - metrics.size(16));
     if (collapsed_) lv_obj_add_flag(heading_, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_clear_flag(heading_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_x(settings_button_, 8);
-    lv_obj_set_width(settings_button_, 38);
+    lv_obj_set_width(settings_button_, metrics.size(38));
     update_settings_button();
     lv_label_set_text(toggle_label_, collapsed_ ? ">" : "<");
     lv_obj_add_flag(lv_obj_get_parent(toggle_label_), LV_OBJ_FLAG_HIDDEN);
@@ -2267,7 +2270,7 @@ class RoomSidebar {
     lv_obj_set_x(devices_, right_x);
     lv_obj_set_width(devices_, right_width);
     for (auto &room : rooms_) {
-      lv_obj_set_width(room.button, 38);
+      lv_obj_set_width(room.button, metrics.size(38));
       if (collapsed_) lv_obj_add_flag(room.name_label, LV_OBJ_FLAG_HIDDEN);
       else lv_obj_clear_flag(room.name_label, LV_OBJ_FLAG_HIDDEN);
       lv_obj_align(room.icon_label, collapsed_ ? LV_ALIGN_CENTER : LV_ALIGN_LEFT_MID, collapsed_ ? 0 : 10, 0);
@@ -2330,7 +2333,7 @@ class RoomSidebar {
     for (auto &room : rooms_) {
       room.button = lv_btn_create(list_);
       lv_obj_set_pos(room.button, 0, y);
-      lv_obj_set_size(room.button, 38, 48);
+      lv_obj_set_size(room.button, HmhLayout::current().size(38), HmhLayout::current().size(48));
       lv_obj_set_style_pad_all(room.button, 0, 0);
       lv_obj_set_style_radius(room.button, 12, 0);
       lv_obj_set_style_bg_color(room.button, hmh_color(0x1E293B), 0);
@@ -2359,7 +2362,7 @@ class RoomSidebar {
           if (entry.button == target) { self->select(entry.id); break; }
         }
       }, LV_EVENT_CLICKED, this);
-      y += 56;
+      y += HmhLayout::current().size(56);
     }
     bool found = false;
     for (const auto &room : rooms_) if (room.id == selected_) found = true;
@@ -2367,7 +2370,7 @@ class RoomSidebar {
     if (rooms_.empty()) {
       selected_.clear();
       lv_obj_t *empty = lv_label_create(list_);
-      lv_obj_set_width(empty, 38);
+      lv_obj_set_width(empty, HmhLayout::current().size(38));
       lv_label_set_text(empty, "—");
       lv_label_set_long_mode(empty, LV_LABEL_LONG_WRAP);
       lv_obj_set_style_text_font(empty, hmh_runtime_text_20, 0);
