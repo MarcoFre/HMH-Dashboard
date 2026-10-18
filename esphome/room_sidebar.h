@@ -1516,8 +1516,11 @@ class RoomDevices {
       int layout_y = 0, column = 0, previous_section = -1, row_height = 92;
       const HmhLayout responsive = HmhLayout::current();
       const int gap = responsive.size(12);
-      // Conservative 1/2-column grid: current widgets need at least ~280 px.
-      const int columns = layout_width_ >= responsive.size(580) ? 2 : 1;
+      // Preserve the proven two-column 800x480 layout (about 700 px usable).
+      // Column count follows a minimum usable card width, not an arbitrary viewport threshold.
+      const int minimum_card_width = responsive.size(260);
+      const int inner_width = std::max(1, layout_width_ - responsive.size(14));
+      const int columns = std::clamp((inner_width + gap) / (minimum_card_width + gap), 1, 3);
       int card_width = std::max(1, (layout_width_ - responsive.size(14) - gap * (columns - 1)) / columns);
       for (size_t i = 0; i < all_selected.size(); ++i) {
         const auto &e = *all_selected[i];
