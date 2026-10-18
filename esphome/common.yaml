@@ -1,4 +1,4 @@
-# HMH Dashboard common 0.4.5 - GUI & runtime shared across Sunton/Waveshare
+# HMH Dashboard common 0.5 Gaia - GUI & runtime shared across Sunton/Waveshare
 # Non installare direttamente: importato dai file entrypoint tramite packages.
 
 substitutions:
@@ -32,7 +32,7 @@ esphome:
           brightness: 100%
           transition_length: 0s
       - lambda: |-
-          ESP_LOGI("ha_dashboard", "HMH Dashboard multi-hardware 0.4.5");
+          ESP_LOGI("ha_dashboard", "HMH Dashboard multi-hardware 0.5 Gaia");
           hmh_history_client=esphome::get_mac_address();
           hmh_calendar.attach(id(page_rooms)->obj);
           hmh_calendar.request=[](int year,int month){id(request_calendar).execute(year,month);};
