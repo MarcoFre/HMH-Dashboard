@@ -265,6 +265,7 @@ class RoomDevices {
     float requested = NAN;
     uint32_t requested_at = 0;
     lv_obj_t *room_label = nullptr, *pm25_label = nullptr, *speed_bar = nullptr;
+    lv_obj_t *gaia_scale = nullptr, *gaia_scale_caption = nullptr;
     lv_obj_t *obj = nullptr, *name = nullptr, *status = nullptr, *lamp = nullptr, *lamp_base = nullptr;
   };
   std::function<void(const std::string &, const std::string &)> on_command;
@@ -1533,7 +1534,7 @@ class RoomDevices {
           layout_y += 32;
           previous_section = group;
           row_height=92;
-          if(group==3) row_height=138; // Gaia sensors keep their values inside the cards.
+          if(group==3) row_height=144; // Gaia sensors keep their values inside the cards.
           if(group==10) {row_height=194;for(const auto *item:all_selected) if(section(*item)==10 && item->alarm_modes.size()>3) row_height=236;}
           for(const auto *item:all_selected) if(section(*item)==group && (tall_card(*item) || (categories && !is_contact(*item)))) {row_height=std::max(row_height,138);break;}
         }
@@ -1563,7 +1564,7 @@ class RoomDevices {
         card.obj = lv_btn_create(list_);
         lv_obj_set_pos(card.obj, column * (card_width + 12), layout_y);
         if (++column == 2) { column = 0; layout_y += row_height; }
-        lv_obj_set_size(card.obj,card_width,e.domain=="alarm_control_panel"?(e.alarm_modes.size()>3?224:182):is_contact(e)?80:(categories || tall_card(e) || e.domain=="sensor")?126:80);
+        lv_obj_set_size(card.obj,card_width,e.domain=="alarm_control_panel"?(e.alarm_modes.size()>3?224:182):is_contact(e)?80:(categories || tall_card(e) || e.domain=="sensor")?132:80);
         lv_obj_set_style_radius(card.obj, 16, 0);
         lv_obj_set_style_pad_all(card.obj, 0, 0);
         lv_obj_set_style_shadow_width(card.obj, 0, 0);
@@ -1604,6 +1605,25 @@ class RoomDevices {
           lv_obj_set_height(card.status, 40);
           lv_obj_set_style_text_font(card.status, e.domain == "sensor" ? hmh_runtime_text_28 : hmh_runtime_text_20, 0);
           lv_obj_set_style_text_color(card.status, lv_color_hex(0xD6F3FF), 0);
+          if (e.domain == "sensor") {
+            const bool percentage=(e.unit=="%" && (e.device_class=="humidity" || e.device_class=="battery"));
+            const bool barometer=(e.device_class=="atmospheric_pressure" || e.unit=="hPa" || e.unit=="mbar");
+            if (percentage || barometer) {
+              card.gaia_scale=lv_bar_create(card.obj);
+              lv_obj_set_pos(card.gaia_scale,16,112);
+              lv_obj_set_size(card.gaia_scale,card_width-32,4);
+              lv_bar_set_range(card.gaia_scale,0,1000);
+              lv_obj_set_style_radius(card.gaia_scale,LV_RADIUS_CIRCLE,LV_PART_MAIN);
+              lv_obj_set_style_radius(card.gaia_scale,LV_RADIUS_CIRCLE,LV_PART_INDICATOR);
+              lv_obj_set_style_bg_color(card.gaia_scale,lv_color_hex(0x29455B),LV_PART_MAIN);
+              lv_obj_set_style_bg_color(card.gaia_scale,lv_color_hex(barometer?0x4DAEED:0x30C9DD),LV_PART_INDICATOR);
+              if (barometer) {
+                card.gaia_scale_caption=make_label(card.obj,16,92,card_width-32,"Pressione relativa");
+                lv_obj_set_style_text_font(card.gaia_scale_caption,hmh_chip_text_14,0);
+                lv_obj_set_style_text_color(card.gaia_scale_caption,lv_color_hex(0x91B3CA),0);
+              }
+            }
+          }
         }
         if (e.domain == "light") {
           card.rgb_dot = lamp_part(card.obj, 70, 45, 16, 16, LV_RADIUS_CIRCLE);
@@ -1875,6 +1895,22 @@ class RoomDevices {
       lv_obj_set_style_border_color(card.obj, hmh_color(0x334155), 0);
       lv_obj_set_style_text_opa(card.name, LV_OPA_COVER, 0);
       lv_obj_set_style_text_opa(card.status, LV_OPA_COVER, 0);
+      if (card.gaia_scale) {
+        const bool barometer=(e.device_class=="atmospheric_pressure" || e.unit=="hPa" || e.unit=="mbar");
+        const float reading=std::strtof(e.state.c_str(),nullptr);
+        const bool numeric=!e.state.empty() && std::isfinite(reading) && (std::isdigit(static_cast<unsigned char>(e.state[0])) || e.state[0]=='-' || e.state[0]=='+');
+        // Percent values have a natural 0..100 range; pressure is mapped to a
+        // barometric 980..1040 hPa reference band, NOT a rain forecast.
+        const float pressure_hpa=e.unit=="kPa"?reading*10.0f:reading;
+        const float fraction=barometer?(pressure_hpa-980.0f)/60.0f:reading/100.0f;
+        if(numeric) {
+          lv_bar_set_value(card.gaia_scale,std::clamp(static_cast<int>(std::lround(fraction*1000.0f)),0,1000),LV_ANIM_OFF);
+          lv_obj_clear_flag(card.gaia_scale,LV_OBJ_FLAG_HIDDEN);
+        } else lv_obj_add_flag(card.gaia_scale,LV_OBJ_FLAG_HIDDEN);
+        if(card.gaia_scale_caption) {
+          lv_label_set_text(card.gaia_scale_caption, numeric?(pressure_hpa<1000?"Bassa pressione":pressure_hpa>1020?"Alta pressione":"Pressione intermedia"):"Pressione non disponibile");
+        }
+      }
       // Binary sensor resta una scheda di sola lettura ma a luminosita' piena.
       lv_obj_set_style_bg_opa(card.obj, LV_OPA_COVER, LV_STATE_DISABLED);
       lv_obj_set_style_bg_color(card.obj, hmh_color(0x1E293B), LV_STATE_DISABLED);
