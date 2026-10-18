@@ -19,7 +19,7 @@ Le stanze e le entità vengono costruite dinamicamente dal catalogo Home Assista
 
 ![Struttura del progetto](docs/images/architettura.svg)
 
-## Hardware e link affiliato
+## Hardware e link di acquisto
 
 | Configurazione | Display |
 | --- | --- |
@@ -29,7 +29,9 @@ Le stanze e le entità vengono costruite dinamicamente dal catalogo Home Assista
 - **[Amazon — link affiliato HackMyHome](https://link.amazon/B0hEK8Jso)**
 - **[Waveshare ESP32-S3-Touch-LCD-7 — link affiliato HackMyHome](https://www.waveshare.com/product/esp32-related/boards-kits/esp32-s3/esp32-s3-touch-lcd-7.htm?aff_id=HackMyHome)**
 
-I collegamenti sono affiliati. Verifica modello e variante nella scheda prodotto prima dell'acquisto.
+- **[Sunton — AliExpress (link non affiliato)](https://it.aliexpress.com/item/1005012366812031.html)**
+
+I link Amazon e Waveshare sono affiliati HackMyHome; il link AliExpress non è affiliato ed è riportato senza parametri di tracciamento. Verifica modello e variante nella scheda prodotto prima dell'acquisto.
 
 ## Struttura
 
