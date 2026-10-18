@@ -1514,7 +1514,11 @@ class RoomDevices {
       headings_.clear();device_headings_.clear();
       std::string previous_device;
       int layout_y = 0, column = 0, previous_section = -1, row_height = 92;
-      int card_width = (layout_width_ - 26) / 2;
+      const HmhLayout responsive = HmhLayout::current();
+      const int gap = responsive.size(12);
+      // Conservative 1/2-column grid: current widgets need at least ~280 px.
+      const int columns = layout_width_ >= responsive.size(580) ? 2 : 1;
+      int card_width = std::max(1, (layout_width_ - responsive.size(14) - gap * (columns - 1)) / columns);
       for (size_t i = 0; i < all_selected.size(); ++i) {
         const auto &e = *all_selected[i];
         int group = section(e);
@@ -1564,8 +1568,8 @@ class RoomDevices {
         card.entity_id = e.id;
         card.width = card_width;
         card.obj = lv_btn_create(list_);
-        lv_obj_set_pos(card.obj, column * (card_width + 12), layout_y);
-        if (++column == 2) { column = 0; layout_y += row_height; }
+        lv_obj_set_pos(card.obj, column * (card_width + gap), layout_y);
+        if (++column == columns) { column = 0; layout_y += row_height; }
         lv_obj_set_size(card.obj,card_width,e.domain=="alarm_control_panel"?(e.alarm_modes.size()>3?224:182):is_contact(e)?80:(categories || tall_card(e) || e.domain=="sensor")?144:80);
         lv_obj_set_style_radius(card.obj, 16, 0);
         lv_obj_set_style_pad_all(card.obj, 0, 0);
