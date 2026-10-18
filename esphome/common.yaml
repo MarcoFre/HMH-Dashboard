@@ -69,6 +69,7 @@ esphome:
           hmh_navigation.set_weather_icon_font(id(mdi_weather_64)->get_lv_font());
           hmh_boot_ota.attach(id(hmh_title_48)->get_lv_font(), id(mdi_area_28)->get_lv_font());
           room_sidebar.on_width_changed = [](int width) { room_devices.set_width(width); };
+          room_devices.set_width(lv_obj_get_width(id(device_list))); // Gaia: sync layout after compact rail was applied.
           room_sidebar.on_selected = [](const std::string &area) {
             hmh_calendar.show(area=="@calendar");
             if(area=="@calendar") {room_devices.show(false);lv_obj_add_flag(id(room_hint),LV_OBJ_FLAG_HIDDEN);}
