@@ -2263,10 +2263,13 @@ class RoomSidebar {
     const int right_width = metrics.content_width();
     lv_obj_set_width(sidebar_, sidebar_width);
     lv_obj_set_width(list_, sidebar_width - metrics.size(16));
+    lv_obj_set_style_pad_all(list_, 0, 0);
     if (collapsed_) lv_obj_add_flag(heading_, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_clear_flag(heading_, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_set_x(settings_button_, 8);
-    lv_obj_set_width(settings_button_, metrics.size(38));
+    lv_obj_set_x(settings_button_, metrics.size(8));
+    lv_obj_set_width(settings_button_, metrics.size(44));
+    lv_obj_set_style_pad_all(settings_button_, 0, 0);
+    lv_obj_align(settings_label_, LV_ALIGN_CENTER, 0, 0);
     update_settings_button();
     lv_label_set_text(toggle_label_, collapsed_ ? ">" : "<");
     lv_obj_add_flag(lv_obj_get_parent(toggle_label_), LV_OBJ_FLAG_HIDDEN);
@@ -2277,7 +2280,7 @@ class RoomSidebar {
     lv_obj_set_x(devices_, right_x);
     lv_obj_set_width(devices_, right_width);
     for (auto &room : rooms_) {
-      lv_obj_set_width(room.button, metrics.size(38));
+      lv_obj_set_width(room.button, metrics.size(44));
       if (collapsed_) lv_obj_add_flag(room.name_label, LV_OBJ_FLAG_HIDDEN);
       else lv_obj_clear_flag(room.name_label, LV_OBJ_FLAG_HIDDEN);
       lv_obj_align(room.icon_label, collapsed_ ? LV_ALIGN_CENTER : LV_ALIGN_LEFT_MID, collapsed_ ? 0 : 10, 0);
@@ -2340,7 +2343,7 @@ class RoomSidebar {
     for (auto &room : rooms_) {
       room.button = lv_btn_create(list_);
       lv_obj_set_pos(room.button, 0, y);
-      lv_obj_set_size(room.button, HmhLayout::current().size(38), HmhLayout::current().size(48));
+      lv_obj_set_size(room.button, HmhLayout::current().size(44), HmhLayout::current().size(48));
       lv_obj_set_style_pad_all(room.button, 0, 0);
       lv_obj_set_style_radius(room.button, 12, 0);
       lv_obj_set_style_bg_color(room.button, hmh_color(0x1E293B), 0);
