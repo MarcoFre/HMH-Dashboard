@@ -7,6 +7,10 @@ Le stanze e le entità vengono costruite dinamicamente dal catalogo Home Assista
 
 > Il banner è un'illustrazione generata con AI: non è una foto del dispositivo né uno screenshot della GUI effettiva.
 
+## Guida all'uso
+
+**[Apri la guida pratica passo passo](docs/guida-pratica.md)**: aggiungere entità, scegliere e ordinare stanze, spostare widget, usare calendario e standby, configurare sfondo e risolvere i problemi più comuni.
+
 ## Funzioni
 
 - Stanze, dispositivi e chip selezionati tramite etichette Home Assistant.
