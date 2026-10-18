@@ -3,6 +3,7 @@
 #pragma once
 #include "lvgl.h"
 #include "hmh_layout.h"
+#include "hmh_tile_grid.h"
 // lvgl.h does not export the image-cache API in this LVGL build.
 // LVGL 9.3+ keeps the cache instances in a dedicated subdirectory.
 #if __has_include("src/misc/cache/instance/lv_image_cache.h")
@@ -1513,21 +1514,23 @@ class RoomDevices {
       cards_.clear();
       headings_.clear();device_headings_.clear();
       std::string previous_device;
-      int layout_y = 0, column = 0, previous_section = -1, row_height = 92;
+      int layout_y = 0, previous_section = -1;
       const HmhLayout responsive = HmhLayout::current();
-      const int gap = responsive.size(12);
-      // Preserve the proven two-column 800x480 layout (about 700 px usable).
-      // Column count follows a minimum usable card width, not an arbitrary viewport threshold.
-      const int minimum_card_width = responsive.size(260);
-      const int inner_width = std::max(1, layout_width_ - responsive.size(14));
-      const int columns = std::clamp((inner_width + gap) / (minimum_card_width + gap), 1, 3);
-      int card_width = std::max(1, (layout_width_ - responsive.size(14) - gap * (columns - 1)) / columns);
+      const int gap = responsive.size(8);
+      const int minimum_half_card_width = responsive.size(255);
+      const int inner_width = std::max(1,layout_width_-responsive.size(14));
+      // Each ordinary card spans two logical tiles. The grid grows in 2-tile
+      // pairs as the screen becomes wider, while large widgets may span more.
+      const int card_columns=std::clamp((inner_width+gap)/(minimum_half_card_width+gap),1,3);
+      const int tile_columns=card_columns*2;
+      HmhTileGrid tile_grid(inner_width,tile_columns,responsive.size(40),gap);
+      tile_grid.reset(layout_y);
       for (size_t i = 0; i < all_selected.size(); ++i) {
         const auto &e = *all_selected[i];
         int group = section(e);
         if (group != previous_section) {
-          if (column != 0) layout_y += row_height;
-          column = 0;
+          layout_y = tile_grid.bottom();
+          tile_grid.reset(layout_y);
           const char *title = group == 0 ? "LUCI" : group == 1 ? "INTERRUTTORI" : group == 2 ? "TERMOSTATI" : group == 3 ? "SENSORI" : group == 4 ? "APERTURE" : group == 5 ? "ENERGIA" : group == 7 ? "VENTILATORI" : group == 10 ? "ALLARME" : group == 9 ? "PURIFICATORI" : group == 8 ? "PORTE E FINESTRE" : "PULSANTI";
           size_t count = 0; for (const auto *item : all_selected) if (section(*item) == group) ++count;
           bool closed = !categories && hmh_widget_layout.collapsed(area_, group);
@@ -1542,15 +1545,12 @@ class RoomDevices {
           headings_.push_back({group, heading});
           layout_y += 26;
           previous_section = group;
-          row_height=92;
-          if(group==3) row_height=138; // Gaia sensors keep their values inside the cards.
-          if(group==10) {row_height=194;for(const auto *item:all_selected) if(section(*item)==10 && item->alarm_modes.size()>3) row_height=236;}
-          for(const auto *item:all_selected) if(section(*item)==group && (tall_card(*item) || (categories && !is_contact(*item)))) {row_height=std::max(row_height,138);break;}
+          tile_grid.reset(layout_y);
         }
         if (!categories && hmh_widget_layout.collapsed(area_, group)) continue;
         const auto key=block_key(e);
         if(key!=previous_device) {
-          if(column!=0 && (key[0]!='@' || (!previous_device.empty() && previous_device[0]!='@'))) {layout_y+=row_height;column=0;}
+          if(key[0]!='@' || (!previous_device.empty() && previous_device[0]!='@')) {layout_y=tile_grid.bottom();tile_grid.reset(layout_y);}
           previous_device=key;
           if(key[0]!='@') {
             size_t count=0;for(const auto &block:device_blocks_) if(block.key==key) count=block.items.size();
@@ -1563,17 +1563,25 @@ class RoomDevices {
             lv_obj_set_height(heading,25);
             lv_obj_add_flag(heading,LV_OBJ_FLAG_CLICKABLE);
             lv_obj_add_event_cb(heading,layout_event,LV_EVENT_ALL,this);
-            device_headings_.push_back({group,key,heading});layout_y+=27;
+            device_headings_.push_back({group,key,heading});layout_y+=27;tile_grid.reset(layout_y);
           }
         }
         if(hmh_widget_layout.device_closed(key)) continue;
+        // Widget specifies a minimum tile footprint based on controls.
+        // Standard sensors: 2x3; simple controls: 2x2; complex alarm: 4x5/6.
+        const bool pressure=(e.device_class=="atmospheric_pressure" || e.unit=="hPa" || e.unit=="mbar");
+        const int requested_columns=(e.domain=="alarm_control_panel" || (pressure && tile_columns>=4))?4:2;
+        const int requested_rows=e.domain=="alarm_control_panel"?(e.alarm_modes.size()>3?6:5)
+            :(e.domain=="sensor" || categories || tall_card(e))?3:2;
+        const auto slot=tile_grid.place(requested_columns,requested_rows);
+        const int card_width=slot.w;
+        const int card_height=slot.h;
         Card card;
         card.entity_id = e.id;
         card.width = card_width;
         card.obj = lv_btn_create(list_);
-        lv_obj_set_pos(card.obj, column * (card_width + gap), layout_y);
-        if (++column == columns) { column = 0; layout_y += row_height; }
-        lv_obj_set_size(card.obj,card_width,e.domain=="alarm_control_panel"?(e.alarm_modes.size()>3?224:182):is_contact(e)?80:(categories || tall_card(e) || e.domain=="sensor")?130:80);
+        lv_obj_set_pos(card.obj,slot.x,slot.y);
+        lv_obj_set_size(card.obj,card_width,card_height);
         lv_obj_set_style_radius(card.obj, 16, 0);
         lv_obj_set_style_pad_all(card.obj, 0, 0);
         lv_obj_set_style_shadow_width(card.obj, 0, 0);
