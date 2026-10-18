@@ -67,15 +67,15 @@ static void hmh_check_glyphs(const lv_font_t *font,const char *text) {
   }
 }
 
-static bool hmh_dark = false;
+static bool hmh_dark = true; // Gaia's initial dark theme
 static const lv_font_t *hmh_mdi_font = hmh_runtime_text_20;
 struct HmhPalette { uint32_t source, light, dark; };
 static const HmhPalette hmh_palette[] = {
-  {0x0B1220,0xFFFFFF,0x000000}, {0x111827,0xF5F5F5,0x101010},
-  {0x1E293B,0xF8F9FA,0x1C1C1C}, {0x0F172A,0xF3F4F6,0x141414},
-  {0x334155,0xE5E7EB,0x303030}, {0xEAF2FF,0x202124,0xECEFF1},
-  {0xF1F5F9,0x202124,0xECEFF1}, {0xCBD5E1,0x60656B,0xB0B5BB},
-  {0x94A3B8,0x555B63,0x9CA3AF}, {0x4A3D22,0xFFEBD0,0x49341D},
+  {0x0B1220,0xFFFFFF,0x071423}, {0x111827,0xF5F5F5,0x0A1C30},
+  {0x1E293B,0xF8F9FA,0x142B43}, {0x0F172A,0xF3F4F6,0x0D2137},
+  {0x334155,0xE5E7EB,0x1B3D59}, {0xEAF2FF,0x202124,0xEDF8FF},
+  {0xF1F5F9,0x202124,0xDCEFFC}, {0xCBD5E1,0x60656B,0xB4D4E8},
+  {0x94A3B8,0x555B63,0x87ADC6}, {0x4A3D22,0xFFEBD0,0x49341D},
   {0x164452,0xE0F2F1,0x164452}, {0x24465A,0xF0F0F0,0x303030},
   {0xFBBF24,0xFF9800,0xFFB347}, {0x64748B,0x9CA3AF,0x73777C}
 };
@@ -2160,7 +2160,7 @@ class RoomSidebar {
   void set_theme_mode(int mode) { theme_mode_ = mode >= 0 && mode <= 2 ? mode : 0; }
   void update_theme(int hour, bool valid) {
     last_hour_ = hour; time_valid_ = valid;
-    bool dark = theme_mode_ == 1 || (theme_mode_ == 2 && valid && (hour >= 20 || hour < 7));
+    bool dark = true; // Gaia preview keeps a navy palette
     if (theme_applied_ && dark == hmh_dark) return;
     hmh_dark = dark; theme_applied_ = true;
     auto *root = lv_obj_get_parent(sidebar_);
@@ -2203,22 +2203,23 @@ class RoomSidebar {
     icon_font_ = icon_font;
     hmh_mdi_font = icon_font;
     update_settings_button();
+    toggle_collapsed(); // Gaia: compact sidebar on boot
   }
   void toggle_collapsed() {
     if (!sidebar_) return;
-    collapsed_ = !collapsed_;
-    const int sidebar_width = collapsed_ ? 82 : 200;
+    collapsed_ = true; // Gaia: always show icons without expanded labels
+    const int sidebar_width = 54;
     const int right_x = sidebar_width + 14;
     const int right_width = 800 - right_x - 12;
     lv_obj_set_width(sidebar_, sidebar_width);
     lv_obj_set_width(list_, sidebar_width - 16);
     if (collapsed_) lv_obj_add_flag(heading_, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_clear_flag(heading_, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_set_x(settings_button_, collapsed_ ? 8 : 12);
-    lv_obj_set_width(settings_button_, collapsed_ ? 66 : 176);
+    lv_obj_set_x(settings_button_, 8);
+    lv_obj_set_width(settings_button_, 38);
     update_settings_button();
     lv_label_set_text(toggle_label_, collapsed_ ? ">" : "<");
-    lv_obj_set_x(lv_obj_get_parent(toggle_label_),collapsed_?24:8);
+    lv_obj_add_flag(lv_obj_get_parent(toggle_label_), LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_x(title_, right_x + 8);
     lv_obj_set_width(title_, right_width - 8);
     lv_obj_set_x(hint_, right_x + 8);
@@ -2226,7 +2227,7 @@ class RoomSidebar {
     lv_obj_set_x(devices_, right_x);
     lv_obj_set_width(devices_, right_width);
     for (auto &room : rooms_) {
-      lv_obj_set_width(room.button, collapsed_ ? 66 : 168);
+      lv_obj_set_width(room.button, 38);
       if (collapsed_) lv_obj_add_flag(room.name_label, LV_OBJ_FLAG_HIDDEN);
       else lv_obj_clear_flag(room.name_label, LV_OBJ_FLAG_HIDDEN);
       lv_obj_align(room.icon_label, collapsed_ ? LV_ALIGN_CENTER : LV_ALIGN_LEFT_MID, collapsed_ ? 0 : 10, 0);
@@ -2289,7 +2290,7 @@ class RoomSidebar {
     for (auto &room : rooms_) {
       room.button = lv_btn_create(list_);
       lv_obj_set_pos(room.button, 0, y);
-      lv_obj_set_size(room.button, collapsed_ ? 66 : 168, 58);
+      lv_obj_set_size(room.button, 38, 48);
       lv_obj_set_style_pad_all(room.button, 0, 0);
       lv_obj_set_style_radius(room.button, 12, 0);
       lv_obj_set_style_bg_color(room.button, hmh_color(0x1E293B), 0);
@@ -2318,7 +2319,7 @@ class RoomSidebar {
           if (entry.button == target) { self->select(entry.id); break; }
         }
       }, LV_EVENT_CLICKED, this);
-      y += 66;
+      y += 56;
     }
     bool found = false;
     for (const auto &room : rooms_) if (room.id == selected_) found = true;
@@ -2326,8 +2327,8 @@ class RoomSidebar {
     if (rooms_.empty()) {
       selected_.clear();
       lv_obj_t *empty = lv_label_create(list_);
-      lv_obj_set_width(empty, collapsed_ ? 62 : 166);
-      lv_label_set_text(empty, categories_ ? "Nessuna categoria" : "Nessuna stanza visibile");
+      lv_obj_set_width(empty, 38);
+      lv_label_set_text(empty, "—");
       lv_label_set_long_mode(empty, LV_LABEL_LONG_WRAP);
       lv_obj_set_style_text_font(empty, hmh_runtime_text_20, 0);
       lv_label_set_text(title_, categories_ ? "Categorie" : "Nessuna stanza");
