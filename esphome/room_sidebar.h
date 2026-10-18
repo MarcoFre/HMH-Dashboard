@@ -1567,12 +1567,17 @@ class RoomDevices {
           }
         }
         if(hmh_widget_layout.device_closed(key)) continue;
-        // Widget specifies a minimum tile footprint based on controls.
-        // Standard sensors: 2x3; simple controls: 2x2; complex alarm: 4x5/6.
-        const bool pressure=(e.device_class=="atmospheric_pressure" || e.unit=="hPa" || e.unit=="mbar");
-        const int requested_columns=(e.domain=="alarm_control_panel" || (pressure && tile_columns>=4))?4:2;
-        const int requested_rows=e.domain=="alarm_control_panel"?(e.alarm_modes.size()>3?6:5)
-            :(e.domain=="sensor" || categories || tall_card(e))?3:2;
+        // Gaia 0.7.1: footprints depend on actual controls and content.
+        // A simple barometer has the same footprint as other numerical sensors.
+        // Expand only for controls that truly require more space.
+        const bool is_alarm=e.domain=="alarm_control_panel";
+        const bool has_control=e.domain=="climate" || e.domain=="cover" ||
+            (e.domain=="light" && e.brightness_supported) ||
+            (e.domain=="fan" && e.speed_supported) ||
+            (is_number(e) && number_range(e));
+        const int requested_columns=is_alarm?4:2;
+        const int requested_rows=is_alarm?(e.alarm_modes.size()>3?6:5)
+            :has_control?3:(e.domain=="sensor" || categories || tall_card(e))?3:2;
         const auto slot=tile_grid.place(requested_columns,requested_rows);
         const int card_width=slot.w;
         const int card_height=slot.h;
