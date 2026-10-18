@@ -1,4 +1,4 @@
-# HMH Dashboard common 0.6.5 Gaia Responsive - GUI & runtime shared across Sunton/Waveshare
+# HMH Dashboard common 0.6.6 Gaia Responsive - GUI & runtime shared across Sunton/Waveshare
 # Non installare direttamente: importato dai file entrypoint tramite packages.
 
 substitutions:
@@ -33,10 +33,10 @@ esphome:
           brightness: 100%
           transition_length: 0s
       - lambda: |-
-          ESP_LOGI("ha_dashboard", "HMH Dashboard multi-hardware 0.6.5 Gaia Responsive");
+          ESP_LOGI("ha_dashboard", "HMH Dashboard multi-hardware 0.6.6 Gaia Responsive");
           const auto hmh_screen = HmhLayout::current();
           char hmh_build_caption[48];
-          snprintf(hmh_build_caption, sizeof(hmh_build_caption), "v0.6.5 | %dx%d", hmh_screen.width, hmh_screen.height);
+          snprintf(hmh_build_caption, sizeof(hmh_build_caption), "v0.6.6 | %dx%d", hmh_screen.width, hmh_screen.height);
           lv_label_set_text(id(status_build_label), hmh_build_caption);
           hmh_history_client=esphome::get_mac_address();
           hmh_calendar.attach(id(page_rooms)->obj);
@@ -617,7 +617,7 @@ lvgl:
                   x: 16
                   y: 31
                   width: 240
-                  text: "v0.6.5 | --x--"
+                  text: "v0.6.6 | --x--"
                   text_font: hmh_text_16
                   text_color: 0x94A3B8
               - label:
