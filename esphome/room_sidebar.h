@@ -1608,7 +1608,12 @@ class RoomDevices {
             static_cast<int>(std::count_if(composite_block->items.begin(),composite_block->items.end(),
                 [&](const Entity *item){return item!=&e;})):0;
         // Two metrics per row; reserve space above the metrics for fan controls.
-        const int composite_rows=std::max(5,(responsive.size(145)+((composite_count+1)/2)*responsive.size(65)+responsive.size(12)+gap+responsive.size(47))/(responsive.size(40)+gap));
+        const int metric_rows=(composite_count+1)/2;
+        const int metrics_bottom=responsive.size(145)+metric_rows*responsive.size(57)+
+            std::max(0,metric_rows-1)*responsive.size(8);
+        const int content_bottom=metric_rows?metrics_bottom+responsive.size(12):responsive.size(145);
+        const int tile_pitch=responsive.size(40)+gap;
+        const int composite_rows=std::max(3,(content_bottom+gap+tile_pitch-1)/tile_pitch);
         const int requested_rows=composite_purifier?composite_rows:is_alarm?(e.alarm_modes.size()>3?6:5)
             :has_control?3:(e.domain=="sensor" || categories || tall_card(e))?3:2;
         const auto slot=tile_grid.place(requested_columns,requested_rows);
