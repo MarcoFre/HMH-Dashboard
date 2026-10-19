@@ -1980,6 +1980,8 @@ class RoomDevices {
       else lv_obj_add_state(card.obj, LV_STATE_DISABLED);
       if (read_only && e.domain!="sensor") lv_obj_clear_flag(card.obj, LV_OBJ_FLAG_CLICKABLE);
       else lv_obj_add_flag(card.obj, LV_OBJ_FLAG_CLICKABLE);
+      if(!card.composite_controls.empty() && (e.domain=="switch" || e.domain=="input_boolean"))
+        lv_obj_clear_flag(card.obj,LV_OBJ_FLAG_CLICKABLE);
       std::string status = status_text(e);
       if (available(e)) {
         if (e.domain == "light") {
