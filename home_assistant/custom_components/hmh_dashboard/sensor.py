@@ -268,17 +268,27 @@ class DashboardCatalog(SensorEntity):
         area_items.sort(key=lambda item: (item["name"].casefold(), item["id"]))
         entity_items = []
         selected = set()
+        excluded_labeled = []
         for entry in entities.entities.values():
             domain = entry.entity_id.split(".", 1)[0]
             is_chip = domain in DOMAINS and bool(entry.labels & chip_ids)
-            if domain not in DOMAINS or entry.disabled_by is not None or not (entry.labels & label_ids or is_chip):
+            if not (entry.labels & label_ids or is_chip):
                 continue
-            if domain == "weather" and not is_chip: continue
+            if domain not in DOMAINS:
+                excluded_labeled.append({"id": entry.entity_id, "reason": "unsupported_domain"})
+                continue
+            if entry.disabled_by is not None:
+                excluded_labeled.append({"id": entry.entity_id, "reason": "disabled"})
+                continue
+            if domain == "weather" and not is_chip:
+                excluded_labeled.append({"id": entry.entity_id, "reason": "weather_not_chip"})
+                continue
             selected.add(entry.entity_id)
             area_id = entry.area_id
             if not area_id and entry.device_id and (device := devices.async_get(entry.device_id)):
                 area_id = device.area_id
             if not area_id or area_id not in areas.areas:
+                excluded_labeled.append({"id": entry.entity_id, "reason": "no_valid_area"})
                 continue
             device = devices.async_get(entry.device_id) if entry.device_id else None
             state = self._hass.states.get(entry.entity_id)
@@ -549,6 +559,10 @@ class DashboardCatalog(SensorEntity):
             "catalogo": "json:" + json.dumps({"areas": area_items}, ensure_ascii=False, separators=(",", ":")),
             "entita": "json:" + json.dumps({"entities": entity_items, "weather": weather}, ensure_ascii=False, separators=(",", ":")),
             "display_label": self._label,
+            "diagnostica_catalogo": {"pubblicate": len(entity_items),
+                "escluse_etichettate": excluded_labeled,
+                "pm25_cucina_presente": any(item["id"] == "sensor.zhimi_mb3_3424_pm25"
+                                           for item in entity_items)},
             "storico": self._history_payload,
             "energia": self._energy_payload,
         }
