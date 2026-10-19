@@ -269,6 +269,20 @@ class DashboardCatalog(SensorEntity):
         entity_items = []
         selected = set()
         excluded_labeled = []
+        debug_ids = ("sensor.zhimi_mb3_3424_pm25",
+                     "sensor.zhimi_mb3_3424_temperature")
+        debug_registry = {}
+        for debug_id in debug_ids:
+            debug_entry = entities.async_get(debug_id)
+            debug_registry[debug_id] = {
+                "nel_registro": debug_entry is not None,
+                "label_ids": sorted(debug_entry.labels) if debug_entry else [],
+                "label_match": bool(debug_entry.labels & label_ids) if debug_entry else False,
+                "disabled": str(debug_entry.disabled_by) if debug_entry else None,
+                "area_id": debug_entry.area_id if debug_entry else None,
+                "device_id": debug_entry.device_id if debug_entry else None,
+                "stato_presente": self._hass.states.get(debug_id) is not None,
+            }
         for entry in entities.entities.values():
             domain = entry.entity_id.split(".", 1)[0]
             is_chip = domain in DOMAINS and bool(entry.labels & chip_ids)
@@ -562,7 +576,9 @@ class DashboardCatalog(SensorEntity):
             "diagnostica_catalogo": {"pubblicate": len(entity_items),
                 "escluse_etichettate": excluded_labeled,
                 "pm25_cucina_presente": any(item["id"] == "sensor.zhimi_mb3_3424_pm25"
-                                           for item in entity_items)},
+                                           for item in entity_items),
+                "label_ids_configurati": sorted(label_ids),
+                "verifica_sensori": debug_registry},
             "storico": self._history_payload,
             "energia": self._energy_payload,
         }
