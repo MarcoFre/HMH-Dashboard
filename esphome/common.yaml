@@ -1,4 +1,4 @@
-# HMH Dashboard common 0.4.5 - GUI & runtime shared across Sunton/Waveshare
+# HMH Dashboard common 0.8.17 Gaia Composite Devices - GUI & runtime shared across Sunton/Waveshare
 # Non installare direttamente: importato dai file entrypoint tramite packages.
 
 substitutions:
@@ -24,6 +24,8 @@ api:
 esphome:
   includes:
     - room_sidebar.h
+    - hmh_layout.h
+    - hmh_tile_grid.h
   on_boot:
     priority: -100
     then:
@@ -32,7 +34,11 @@ esphome:
           brightness: 100%
           transition_length: 0s
       - lambda: |-
-          ESP_LOGI("ha_dashboard", "HMH Dashboard multi-hardware 0.4.5");
+          ESP_LOGI("ha_dashboard", "HMH Dashboard multi-hardware 0.8.17 Gaia Composite Devices");
+          const auto hmh_screen = HmhLayout::current();
+          char hmh_build_caption[48];
+          snprintf(hmh_build_caption, sizeof(hmh_build_caption), "v0.8.17 | %dx%d", hmh_screen.width, hmh_screen.height);
+          lv_label_set_text(id(status_build_label), hmh_build_caption);
           hmh_history_client=esphome::get_mac_address();
           hmh_calendar.attach(id(page_rooms)->obj);
           hmh_calendar.request=[](int year,int month){id(request_calendar).execute(year,month);};
@@ -69,6 +75,7 @@ esphome:
           hmh_navigation.set_weather_icon_font(id(mdi_weather_64)->get_lv_font());
           hmh_boot_ota.attach(id(hmh_title_48)->get_lv_font(), id(mdi_area_28)->get_lv_font());
           room_sidebar.on_width_changed = [](int width) { room_devices.set_width(width); };
+          room_devices.set_width(lv_obj_get_width(id(device_list))); // Gaia: sync layout after compact rail was applied.
           room_sidebar.on_selected = [](const std::string &area) {
             hmh_calendar.show(area=="@calendar");
             if(area=="@calendar") {room_devices.show(false);lv_obj_add_flag(id(room_hint),LV_OBJ_FLAG_HIDDEN);}
@@ -601,11 +608,19 @@ lvgl:
             widgets:
               - label:
                   x: 16
-                  y: 17
+                  y: 5
                   width: 240
                   text: "HMH Dashboard"
                   text_font: hmh_text_20
                   text_color: 0x22D3EE
+              - label:
+                  id: status_build_label
+                  x: 16
+                  y: 31
+                  width: 240
+                  text: "v0.8.17 | --x--"
+                  text_font: hmh_text_16
+                  text_color: 0x94A3B8
               - label:
                   id: status_clock
                   x: 270
@@ -673,7 +688,7 @@ lvgl:
                   y: 42
                   width: 184
                   height: 316
-                  pad_all: 4
+                  pad_all: 0
                   radius: 0
                   border_width: 0
                   bg_opa: TRANSP
@@ -719,7 +734,7 @@ lvgl:
         - label:
             id: room_hint
             x: 222
-            y: 128
+            y: 67
             width: 548
             text: "In attesa del catalogo HA..."
             text_font: hmh_text_16
@@ -728,9 +743,9 @@ lvgl:
         - obj:
             id: device_list
             x: 214
-            y: 162
+            y: 76
             width: 574
-            height: 306
+            height: 392
             pad_all: 4
             border_width: 0
             radius: 0

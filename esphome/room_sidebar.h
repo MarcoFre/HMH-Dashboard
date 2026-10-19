@@ -2,6 +2,8 @@
 #include "esphome/core/helpers.h"
 #pragma once
 #include "lvgl.h"
+#include "hmh_layout.h"
+#include "hmh_tile_grid.h"
 // lvgl.h does not export the image-cache API in this LVGL build.
 // LVGL 9.3+ keeps the cache instances in a dedicated subdirectory.
 #if __has_include("src/misc/cache/instance/lv_image_cache.h")
@@ -23,6 +25,7 @@
 #include <cmath>
 #include <cstdio>
 #include <ctime>
+#include <cctype>
 
 
 static const lv_font_t *hmh_chip_text_14 = &lv_font_montserrat_16;
@@ -67,15 +70,15 @@ static void hmh_check_glyphs(const lv_font_t *font,const char *text) {
   }
 }
 
-static bool hmh_dark = false;
+static bool hmh_dark = true; // Gaia's initial dark theme
 static const lv_font_t *hmh_mdi_font = hmh_runtime_text_20;
 struct HmhPalette { uint32_t source, light, dark; };
 static const HmhPalette hmh_palette[] = {
-  {0x0B1220,0xFFFFFF,0x000000}, {0x111827,0xF5F5F5,0x101010},
-  {0x1E293B,0xF8F9FA,0x1C1C1C}, {0x0F172A,0xF3F4F6,0x141414},
-  {0x334155,0xE5E7EB,0x303030}, {0xEAF2FF,0x202124,0xECEFF1},
-  {0xF1F5F9,0x202124,0xECEFF1}, {0xCBD5E1,0x60656B,0xB0B5BB},
-  {0x94A3B8,0x555B63,0x9CA3AF}, {0x4A3D22,0xFFEBD0,0x49341D},
+  {0x0B1220,0xFFFFFF,0x071423}, {0x111827,0xF5F5F5,0x0A1C30},
+  {0x1E293B,0xF8F9FA,0x142B43}, {0x0F172A,0xF3F4F6,0x0D2137},
+  {0x334155,0xE5E7EB,0x1B3D59}, {0xEAF2FF,0x202124,0xEDF8FF},
+  {0xF1F5F9,0x202124,0xDCEFFC}, {0xCBD5E1,0x60656B,0xB4D4E8},
+  {0x94A3B8,0x555B63,0x87ADC6}, {0x4A3D22,0xFFEBD0,0x49341D},
   {0x164452,0xE0F2F1,0x164452}, {0x24465A,0xF0F0F0,0x303030},
   {0xFBBF24,0xFF9800,0xFFB347}, {0x64748B,0x9CA3AF,0x73777C}
 };
@@ -260,11 +263,15 @@ class RoomDevices {
     HmhBatteryWidget battery;
     std::vector<std::pair<lv_obj_t *,std::string>> alarm_buttons;
     std::string entity_id;
+    bool uniform_composite = false;
     int width = 0;
     lv_obj_t *minus = nullptr, *plus = nullptr, *mode = nullptr, *target = nullptr;
     float requested = NAN;
     uint32_t requested_at = 0;
     lv_obj_t *room_label = nullptr, *pm25_label = nullptr, *speed_bar = nullptr;
+    std::vector<std::pair<std::string, lv_obj_t *>> composite_metrics;
+    std::vector<std::pair<std::string, lv_obj_t *>> composite_controls;
+    lv_obj_t *gaia_scale = nullptr, *gaia_scale_caption = nullptr;
     lv_obj_t *obj = nullptr, *name = nullptr, *status = nullptr, *lamp = nullptr, *lamp_base = nullptr;
   };
   std::function<void(const std::string &, const std::string &)> on_command;
@@ -397,7 +404,8 @@ class RoomDevices {
         e.name = item["name"].as<const char *>();
         e.state = item["state"].as<const char *>();
         e.code_format=item["code_format"] | "";e.code_arm_required=item["code_arm_required"] | true;e.code_disarm_required=item["code_disarm_required"] | false;
-        for(JsonVariant mode:item["alarm_modes"].as<JsonArray>()) if(mode.is<const char *>()) e.alarm_modes.push_back(mode.as<const char *>());
+        JsonArray alarm_modes_array=item["alarm_modes"].as<JsonArray>();
+        for(JsonVariant mode:alarm_modes_array) if(mode.is<const char *>()) e.alarm_modes.push_back(mode.as<const char *>());
         e.has_battery=item["has_battery"] | false;e.battery_known=item["battery_known"] | false;e.battery_low=item["battery_low"] | false;
         e.battery_only=item["battery_only"] | false;e.battery_entity=item["battery_entity"] | false;e.battery_level=item["battery_level"].is<float>()?item["battery_level"].as<float>():NAN;
         e.chip=item["chip"] | false;e.group_section=item["group_section"] | -1;
@@ -1295,7 +1303,7 @@ class RoomDevices {
     for(const auto &e:entities_) if(e.chip && matches_view(e)) selected.push_back(&e);
     std::stable_sort(selected.begin(),selected.end(),[](const Entity *a,const Entity *b){return hmh_widget_layout.entity_rank(a->id)<hmh_widget_layout.entity_rank(b->id);});
     if(selected.empty()) {
-      lv_obj_set_y(list_,162);lv_obj_set_height(list_,306);
+      lv_obj_set_y(list_,76);lv_obj_set_height(list_,392);
       if(chip_row_) lv_obj_add_flag(chip_row_,LV_OBJ_FLAG_HIDDEN);
       lv_obj_clear_flag(hint_,LV_OBJ_FLAG_HIDDEN);return;
     }
@@ -1305,12 +1313,12 @@ class RoomDevices {
       lv_obj_set_style_bg_opa(chip_row_,LV_OPA_TRANSP,0);
       lv_obj_set_scroll_dir(chip_row_,LV_DIR_VER);lv_obj_set_scrollbar_mode(chip_row_,LV_SCROLLBAR_MODE_OFF);
     }
-    lv_obj_set_pos(chip_row_,lv_obj_get_x(list_)+4,78);
+    lv_obj_set_pos(chip_row_,lv_obj_get_x(list_)+4,62);
     const int columns=layout_width_>600?3:2;
     const int rows=(selected.size()+columns-1)/columns;
-    const int list_y=std::min(376,162+(rows-1)*46);
+    const int list_y=std::min(376,76+rows*46);
     lv_obj_set_y(list_,list_y);lv_obj_set_height(list_,480-list_y-12);
-    lv_obj_set_size(chip_row_,layout_width_-8,std::min(rows*46,list_y-86));
+    lv_obj_set_size(chip_row_,layout_width_-8,std::min(rows*46,list_y-66));
     lv_obj_clear_flag(chip_row_,LV_OBJ_FLAG_HIDDEN);lv_obj_add_flag(hint_,LV_OBJ_FLAG_HIDDEN);
     bool rebuild=force || selected.size()!=chips_.size();
     if(!rebuild) for(size_t i=0;i<selected.size();++i) if(selected[i]->id!=chips_[i].id || selected[i]->has_battery!=(chips_[i].battery.root!=nullptr)) {rebuild=true;break;}
@@ -1462,7 +1470,7 @@ class RoomDevices {
     if (!list_ || !visible_ || dragging_) return;
     if(area_=="@energy") {refresh_energy();return;}
     if(energy_view_) {energy_view_=false;lv_obj_set_y(hint_,128);force_rebuild=true;}
-    if(area_.rfind("@battery:",0)==0) {lv_obj_set_y(list_,162);lv_obj_set_height(list_,306);refresh_batteries(force_rebuild);return;}
+    if(area_.rfind("@battery:",0)==0) {lv_obj_set_y(list_,76);lv_obj_set_height(list_,392);refresh_batteries(force_rebuild);return;}
     if(battery_view_) {battery_cards_.clear();battery_view_=false;force_rebuild=true;}
     lv_obj_set_style_text_font(hint_,hmh_runtime_text_16,0);
     refresh_chips(force_rebuild);
@@ -1484,6 +1492,21 @@ class RoomDevices {
         return hmh_widget_layout.entity_rank(a->id)<hmh_widget_layout.entity_rank(b->id);
       });
     }
+    // Gaia 0.8 pilot: one purifier card per real HA device. Only sensor
+    // children join it; unrelated domains stay individually controllable.
+    for(auto &block:device_blocks_) {
+      auto primary=std::find_if(block.items.begin(),block.items.end(),
+          [](const Entity *e){return e->domain=="fan" && e->purifier;});
+      if(primary==block.items.end()) primary=std::find_if(block.items.begin(),block.items.end(),
+          [](const Entity *e){return e->domain=="light" || e->domain=="switch" ||
+              e->domain=="fan" || e->domain=="climate" || e->domain=="cover";});
+      if(primary!=block.items.end() && block.grouped) {
+        const Entity *fan=*primary;
+        block.items.erase(primary);
+        block.items.insert(block.items.begin(),fan);
+        block.group=section(*fan);
+      }
+    }
     std::stable_sort(device_blocks_.begin(),device_blocks_.end(),[&](const DeviceBlock &a,const DeviceBlock &b){
       if(a.group!=b.group) return categories?a.group<b.group:
         hmh_widget_layout.category_rank(area_,a.group)<hmh_widget_layout.category_rank(area_,b.group);
@@ -1492,9 +1515,15 @@ class RoomDevices {
     selected.clear();std::string signature;
     for(const auto &block:device_blocks_) {
       signature+=block.key+"|"+block.items[0]->device_name+";";
-      for(const auto *e:block.items) {selected.push_back(e);signature+=e->has_battery?"B":"N";for(const auto &mode:e->alarm_modes) signature+=mode+",";}
+      const bool composite=block.grouped && !block.items.empty();
+      for(const auto *e:block.items) {
+        // Sensor children are drawn inside the parent's card.
+        if(!composite || e==block.items[0]) selected.push_back(e);
+        signature+=e->id+"|"+e->name+"|"+e->device_class+"|"+e->unit+";";signature+=e->has_battery?"B":"N";
+        for(const auto &mode:e->alarm_modes) signature+=mode+",";
+      }
     }
-    if(signature!=groups_signature_) {layout_dirty_=true;groups_signature_=signature;}
+    if(signature!=groups_signature_) {layout_dirty_=true;groups_signature_=signature;} // Device metric changes force a complete layout recalculation.
     auto all_selected = selected;
     selected.erase(std::remove_if(selected.begin(), selected.end(), [&](const Entity *e) {
       return (!categories && hmh_widget_layout.collapsed(area_,section(*e))) ||
@@ -1510,36 +1539,43 @@ class RoomDevices {
       cards_.clear();
       headings_.clear();device_headings_.clear();
       std::string previous_device;
-      int layout_y = 0, column = 0, previous_section = -1, row_height = 92;
-      int card_width = (layout_width_ - 26) / 2;
+      int layout_y = 0, previous_section = -1;
+      const HmhLayout responsive = HmhLayout::current();
+      const int gap = responsive.size(8);
+      const int minimum_half_card_width = responsive.size(255);
+      const int inner_width = std::max(1,layout_width_-responsive.size(14));
+      // Each ordinary card spans two logical tiles. The grid grows in 2-tile
+      // pairs as the screen becomes wider, while large widgets may span more.
+      const int card_columns=std::clamp((inner_width+gap)/(minimum_half_card_width+gap),1,3);
+      const int tile_columns=card_columns*2;
+      HmhTileGrid tile_grid(inner_width,tile_columns,responsive.size(40),gap);
+      tile_grid.reset(layout_y);
       for (size_t i = 0; i < all_selected.size(); ++i) {
         const auto &e = *all_selected[i];
         int group = section(e);
         if (group != previous_section) {
-          if (column != 0) layout_y += row_height;
-          column = 0;
+          layout_y = tile_grid.bottom();
+          tile_grid.reset(layout_y);
           const char *title = group == 0 ? "LUCI" : group == 1 ? "INTERRUTTORI" : group == 2 ? "TERMOSTATI" : group == 3 ? "SENSORI" : group == 4 ? "APERTURE" : group == 5 ? "ENERGIA" : group == 7 ? "VENTILATORI" : group == 10 ? "ALLARME" : group == 9 ? "PURIFICATORI" : group == 8 ? "PORTE E FINESTRE" : "PULSANTI";
           size_t count = 0; for (const auto *item : all_selected) if (section(*item) == group) ++count;
           bool closed = !categories && hmh_widget_layout.collapsed(area_, group);
           std::string caption = std::string(categories ? "" : closed ? "+ " : "- ") + title + " · " + std::to_string(count);
           auto *heading = make_label(list_, 2, layout_y, layout_width_ - 18, caption.c_str());
-          lv_obj_set_height(heading, 34);
+          lv_obj_set_height(heading, 24);
           lv_obj_set_style_text_color(heading, hmh_color(0x22D3EE), 0);
           if (!categories) {
             lv_obj_add_flag(heading, LV_OBJ_FLAG_CLICKABLE);
             lv_obj_add_event_cb(heading, layout_event, LV_EVENT_ALL, this);
           }
           headings_.push_back({group, heading});
-          layout_y += 42;
+          layout_y += 26;
           previous_section = group;
-          row_height=92;
-          if(group==10) {row_height=194;for(const auto *item:all_selected) if(section(*item)==10 && item->alarm_modes.size()>3) row_height=236;}
-          for(const auto *item:all_selected) if(section(*item)==group && (tall_card(*item) || (categories && !is_contact(*item)))) {row_height=std::max(row_height,138);break;}
+          tile_grid.reset(layout_y);
         }
         if (!categories && hmh_widget_layout.collapsed(area_, group)) continue;
         const auto key=block_key(e);
         if(key!=previous_device) {
-          if(column!=0 && (key[0]!='@' || (!previous_device.empty() && previous_device[0]!='@'))) {layout_y+=row_height;column=0;}
+          if(key[0]!='@' || (!previous_device.empty() && previous_device[0]!='@')) {layout_y=tile_grid.bottom();tile_grid.reset(layout_y);}
           previous_device=key;
           if(key[0]!='@') {
             size_t count=0;for(const auto &block:device_blocks_) if(block.key==key) count=block.items.size();
@@ -1549,29 +1585,75 @@ class RoomDevices {
             auto *heading=make_label(list_,12,layout_y,layout_width_-30,caption.c_str());
             lv_obj_set_style_text_font(heading,hmh_runtime_text_20,0);
             lv_obj_set_style_text_color(heading,hmh_color(0xCBD5E1),0);
-            lv_obj_set_height(heading,36);
+            lv_obj_set_height(heading,25);
             lv_obj_add_flag(heading,LV_OBJ_FLAG_CLICKABLE);
             lv_obj_add_event_cb(heading,layout_event,LV_EVENT_ALL,this);
-            device_headings_.push_back({group,key,heading});layout_y+=42;
+            device_headings_.push_back({group,key,heading});layout_y+=27;tile_grid.reset(layout_y);
           }
         }
         if(hmh_widget_layout.device_closed(key)) continue;
+        // Gaia 0.7.1: footprints depend on actual controls and content.
+        // A simple barometer has the same footprint as other numerical sensors.
+        // Expand only for controls that truly require more space.
+        const bool is_alarm=e.domain=="alarm_control_panel";
+        const bool has_control=e.domain=="climate" || e.domain=="cover" ||
+            (e.domain=="light" && e.brightness_supported) ||
+            (e.domain=="fan" && e.speed_supported) ||
+            (is_number(e) && number_range(e));
+        const auto composite_key=device_key(e);
+        const auto composite_block=std::find_if(device_blocks_.begin(),device_blocks_.end(),
+            [&](const DeviceBlock &b){return b.grouped && b.key==composite_key &&
+                !b.items.empty() && b.items[0]==&e;});
+        const bool composite_purifier=composite_block!=device_blocks_.end();
+        const bool sensor_only_composite=composite_purifier &&
+            std::all_of(composite_block->items.begin(),composite_block->items.end(),
+                [](const Entity *item){return item->domain=="sensor" || item->domain=="binary_sensor";});
+        const bool switch_only_composite=composite_purifier &&
+            std::all_of(composite_block->items.begin(),composite_block->items.end(),
+                [](const Entity *item){return item->domain=="switch" || item->domain=="input_boolean";});
+        const bool uniform_composite=sensor_only_composite || switch_only_composite;
+        const int requested_columns=(is_alarm || composite_purifier)?4:2;
+        const int composite_count=composite_purifier?
+            static_cast<int>(composite_block->items.size())-(uniform_composite?0:1):0;
+        // Two metrics per row; reserve space above the metrics for fan controls.
+        const int metric_rows=(composite_count+1)/2;
+        const bool compact_switch_metrics=composite_purifier && !uniform_composite &&
+            (e.domain=="switch" || e.domain=="input_boolean") && !has_control;
+        const int metrics_top=uniform_composite?responsive.size(16):
+            compact_switch_metrics?responsive.size(82):responsive.size(145);
+        const int metrics_bottom=metrics_top+metric_rows*responsive.size(57)+
+            std::max(0,metric_rows-1)*responsive.size(8);
+        const int content_bottom=metric_rows?metrics_bottom+responsive.size(12):metrics_top+responsive.size(12);
+        const int tile_pitch=responsive.size(40)+gap;
+        // Uniform grids contain only metric tiles: two rows need no hero-sized minimum.
+        const int composite_rows=std::max((uniform_composite || compact_switch_metrics)?2:3,
+            (content_bottom+gap+tile_pitch-1)/tile_pitch);
+        // Alarm actions start at y=78/88, with 42 px row pitch and 34 px buttons.
+        // Include the final disarm row, then reserve a small bottom breathing space.
+        const int alarm_action_rows=(static_cast<int>(e.alarm_modes.size())+2)/3;
+        const int alarm_bottom=(categories?88:78)+alarm_action_rows*42+34+12;
+        const int alarm_rows=std::max(3,(alarm_bottom+gap+tile_pitch-1)/tile_pitch);
+        const int requested_rows=composite_purifier?composite_rows:is_alarm?alarm_rows
+            :has_control?3:(e.domain=="sensor" || categories || tall_card(e))?3:2;
+        const auto slot=tile_grid.place(requested_columns,requested_rows);
+        const int card_width=slot.w;
+        const int card_height=slot.h;
         Card card;
         card.entity_id = e.id;
+        card.uniform_composite = uniform_composite;
         card.width = card_width;
         card.obj = lv_btn_create(list_);
-        lv_obj_set_pos(card.obj, column * (card_width + 12), layout_y);
-        if (++column == 2) { column = 0; layout_y += row_height; }
-        lv_obj_set_size(card.obj,card_width,e.domain=="alarm_control_panel"?(e.alarm_modes.size()>3?224:182):is_contact(e)?80:(categories || tall_card(e))?126:80);
-        lv_obj_set_style_radius(card.obj, 18, 0);
+        lv_obj_set_pos(card.obj,slot.x,slot.y);
+        lv_obj_set_size(card.obj,card_width,card_height);
+        lv_obj_set_style_radius(card.obj, 16, 0);
         lv_obj_set_style_pad_all(card.obj, 0, 0);
         lv_obj_set_style_shadow_width(card.obj, 0, 0);
         lv_obj_set_style_border_width(card.obj, 1, 0);
-        lv_obj_set_style_border_color(card.obj, hmh_color(0x334155), 0);
+        lv_obj_set_style_border_color(card.obj, lv_color_hex(0x245377), 0);
         lv_obj_set_style_bg_color(card.obj, hmh_color(0x24465A), LV_STATE_PRESSED);
         auto *icon_tile = lamp_part(card.obj, 12, 17, 46, 46, LV_RADIUS_CIRCLE);
         card.icon_tile = icon_tile;
-        lv_obj_set_style_bg_color(icon_tile, hmh_color(0x334155), 0);
+        lv_obj_set_style_bg_color(icon_tile, lv_color_hex(0x254560), 0);
         if (e.domain == "light") {
           card.lamp = lamp_part(icon_tile, 12, 8, 22, 24, LV_RADIUS_CIRCLE);
           card.lamp_base = lamp_part(icon_tile, 18, 30, 10, 7, 2);
@@ -1586,7 +1668,7 @@ class RoomDevices {
           lv_obj_set_style_text_color(icon, hmh_color(0x22D3EE), 0);
         }
         card.name = make_label(card.obj, 70, 19, card_width - 82, e.name.c_str());
-        lv_obj_set_style_text_color(card.name, hmh_color(0xF1F5F9), 0);
+        lv_obj_set_style_text_color(card.name, lv_color_hex(0xE8F6FF), 0);
         card.status = make_label(card.obj, 70, 44, card_width - 82, "...");
         lv_obj_set_style_text_color(card.status, hmh_color(0x94A3B8), 0);
         if (categories && !is_contact(e)) {
@@ -1594,13 +1676,47 @@ class RoomDevices {
           lv_obj_set_style_text_color(card.room_label, hmh_color(0x94A3B8), 0);
         }
         if (e.domain == "sensor" || e.domain == "binary_sensor") {
-          lv_obj_set_y(card.name, 14);
-          lv_obj_set_height(card.name, 46);
-          lv_label_set_long_mode(card.name, LV_LABEL_LONG_WRAP);
-          lv_obj_set_pos(card.status, 16, 78);
-          lv_obj_set_width(card.status, card_width - 32);
-          lv_obj_set_height(card.status, 36);
-          lv_obj_set_style_text_font(card.status, e.domain == "sensor" ? hmh_runtime_text_28 : hmh_runtime_text_20, 0);
+          // Gaia 0.7.2: place each section relative to the tile slot, not
+          // to a fixed 130px card. Reserve header, value and optional footer.
+          const HmhLayout cell_metrics=HmhLayout::current();
+          const int inset=cell_metrics.size(12);
+          const int header_height=cell_metrics.size(40);
+          const int value_y=inset+header_height+cell_metrics.size(5);
+          lv_obj_set_pos(card.icon_tile,inset,inset);
+          lv_obj_set_size(card.icon_tile,cell_metrics.size(38),cell_metrics.size(38));
+          if(card.icon) {
+            lv_obj_set_width(card.icon,cell_metrics.size(38));
+            lv_obj_center(card.icon);
+          }
+          lv_obj_set_pos(card.name,inset+cell_metrics.size(46),inset);
+          lv_obj_set_width(card.name,std::max(30,card_width-inset*2-cell_metrics.size(46)));
+          lv_obj_set_height(card.name,header_height);
+          lv_label_set_long_mode(card.name, LV_LABEL_LONG_DOT);
+          lv_obj_set_pos(card.status,inset,value_y);
+          lv_obj_set_width(card.status,std::max(30,card_width-inset*2));
+          lv_obj_set_height(card.status,cell_metrics.size(33));
+          lv_obj_set_style_text_font(card.status,
+              (e.domain=="sensor" && card_width>=cell_metrics.size(225))?hmh_runtime_text_28:hmh_runtime_text_20,0);
+          lv_obj_set_style_text_color(card.status, lv_color_hex(0xD6F3FF), 0);
+          if (e.domain == "sensor") {
+            const bool percentage=(e.unit=="%" && (e.device_class=="humidity" || e.device_class=="battery"));
+            const bool barometer=(e.device_class=="atmospheric_pressure" || e.unit=="hPa" || e.unit=="mbar");
+            if (percentage || barometer) {
+              card.gaia_scale=lv_bar_create(card.obj);
+              lv_obj_set_pos(card.gaia_scale,inset,card_height-cell_metrics.size(10));
+              lv_obj_set_size(card.gaia_scale,card_width-inset*2,cell_metrics.size(4));
+              lv_bar_set_range(card.gaia_scale,0,1000);
+              lv_obj_set_style_radius(card.gaia_scale,LV_RADIUS_CIRCLE,LV_PART_MAIN);
+              lv_obj_set_style_radius(card.gaia_scale,LV_RADIUS_CIRCLE,LV_PART_INDICATOR);
+              lv_obj_set_style_bg_color(card.gaia_scale,lv_color_hex(0x29455B),LV_PART_MAIN);
+              lv_obj_set_style_bg_color(card.gaia_scale,lv_color_hex(barometer?0x4DAEED:0x30C9DD),LV_PART_INDICATOR);
+              if (barometer) {
+                card.gaia_scale_caption=make_label(card.obj,inset,card_height-cell_metrics.size(31),card_width-inset*2,"Pressione relativa");
+                lv_obj_set_style_text_font(card.gaia_scale_caption,hmh_chip_text_14,0);
+                lv_obj_set_style_text_color(card.gaia_scale_caption,lv_color_hex(0x91B3CA),0);
+              }
+            }
+          }
         }
         if (e.domain == "light") {
           card.rgb_dot = lamp_part(card.obj, 70, 45, 16, 16, LV_RADIUS_CIRCLE);
@@ -1609,10 +1725,14 @@ class RoomDevices {
           lv_obj_add_flag(card.rgb_dot, LV_OBJ_FLAG_HIDDEN);
         }
         if (e.domain == "cover") {
-          int w = (card_width - 40) / 3;
-          card.minus = detail_button(card.obj, 12, 78, w, 36, LV_SYMBOL_DOWN);
-          card.mode = detail_button(card.obj, 20 + w, 78, w, 36, LV_SYMBOL_PAUSE);
-          card.plus = detail_button(card.obj, 28 + w * 2, 78, w, 36, LV_SYMBOL_UP);
+          const int touch_gap=responsive.size(8);
+          const int touch_pad=responsive.size(12);
+          const int touch_height=responsive.size(36);
+          const int controls_y=card_height-touch_height-responsive.size(10);
+          int w = std::max(responsive.size(32),(card_width-2*touch_pad-2*touch_gap)/3);
+          card.minus = detail_button(card.obj,touch_pad,controls_y,w,touch_height,LV_SYMBOL_DOWN);
+          card.mode = detail_button(card.obj,touch_pad+w+touch_gap,controls_y,w,touch_height,LV_SYMBOL_PAUSE);
+          card.plus = detail_button(card.obj,touch_pad+2*(w+touch_gap),controls_y,w,touch_height,LV_SYMBOL_UP);
           for (auto *button : {card.minus, card.mode, card.plus}) {
             lv_obj_set_style_bg_color(button, hmh_color(0x334155), 0);
             lv_obj_clear_flag(button, LV_OBJ_FLAG_EVENT_BUBBLE);
@@ -1630,10 +1750,14 @@ class RoomDevices {
           }
         }
         if (e.domain == "climate") {
-          card.minus = detail_button(card.obj, 12, 78, 40, 36, "-");
-          card.plus = detail_button(card.obj, card_width - 96, 78, 40, 36, "+");
-          card.mode = detail_button(card.obj, card_width - 48, 78, 36, 36, LV_SYMBOL_SETTINGS);
-          card.target = make_label(card.obj, 56, 86, card_width - 156, "--");
+          const int control_h=responsive.size(36);
+          const int control_y=card_height-control_h-responsive.size(10);
+          const int control_pad=responsive.size(12);
+          const int control_w=responsive.size(40);
+          card.minus = detail_button(card.obj,control_pad,control_y,control_w,control_h,"-");
+          card.plus = detail_button(card.obj,card_width-control_pad-control_w*2-responsive.size(8),control_y,control_w,control_h,"+");
+          card.mode = detail_button(card.obj,card_width-control_pad-control_w,control_y,control_w,control_h,LV_SYMBOL_SETTINGS);
+          card.target = make_label(card.obj,control_pad+control_w+responsive.size(4),control_y+responsive.size(8),std::max(30,card_width-2*control_pad-3*control_w-responsive.size(16)),"--");
           lv_obj_set_style_text_align(card.target, LV_TEXT_ALIGN_CENTER, 0);
           for (auto *button : {card.minus, card.plus, card.mode}) {
             lv_obj_set_style_bg_color(button, hmh_color(0x334155), 0);
@@ -1646,8 +1770,8 @@ class RoomDevices {
         }
         if ((e.domain == "light" && e.brightness_supported) || (e.domain == "fan" && e.speed_supported)) {
           card.slider = lv_slider_create(card.obj);
-          lv_obj_set_pos(card.slider, 12, 78);
-          lv_obj_set_size(card.slider, card_width - 24, 36);
+          lv_obj_set_pos(card.slider,responsive.size(12),card_height-responsive.size(46));
+          lv_obj_set_size(card.slider,card_width-responsive.size(24),responsive.size(36));
           lv_slider_set_range(card.slider, 0, e.domain == "fan" ? 100 : 255);
           lv_obj_set_style_radius(card.slider, 12, LV_PART_MAIN);
           lv_obj_set_style_radius(card.slider, 12, LV_PART_INDICATOR);
@@ -1719,10 +1843,11 @@ class RoomDevices {
         if(e.purifier) {
           card.pm25_label=make_label(card.obj,12,categories?80:68,card_width-24,"");
           lv_obj_set_height(card.pm25_label,20);
-          if(card.slider) {lv_obj_set_y(card.slider,categories?103:90);lv_obj_set_height(card.slider,categories?18:30);}
+          if(composite_purifier) lv_obj_add_flag(card.pm25_label,LV_OBJ_FLAG_HIDDEN);
+          if(card.slider) {lv_obj_set_y(card.slider,composite_purifier?responsive.size(100):(categories?103:90));lv_obj_set_height(card.slider,composite_purifier?responsive.size(30):(categories?18:30));}
           else {
-            card.speed_bar=lv_bar_create(card.obj);lv_obj_set_pos(card.speed_bar,12,categories?103:90);
-            lv_obj_set_size(card.speed_bar,card_width-24,categories?18:30);lv_bar_set_range(card.speed_bar,0,100);
+            card.speed_bar=lv_bar_create(card.obj);lv_obj_set_pos(card.speed_bar,12,composite_purifier?responsive.size(100):(categories?103:90));
+            lv_obj_set_size(card.speed_bar,card_width-24,composite_purifier?responsive.size(30):(categories?18:30));lv_bar_set_range(card.speed_bar,0,100);
             lv_obj_clear_flag(card.speed_bar,LV_OBJ_FLAG_CLICKABLE);
           }
           auto *bar=card.slider?card.slider:card.speed_bar;
@@ -1731,6 +1856,109 @@ class RoomDevices {
           lv_obj_set_style_bg_color(bar,lv_color_hex(0x9333B5),LV_PART_INDICATOR);
           lv_obj_set_style_bg_opa(bar,LV_OPA_COVER,LV_PART_MAIN);
           lv_obj_set_style_bg_opa(bar,LV_OPA_COVER,LV_PART_INDICATOR);
+        }
+        if(uniform_composite) {
+          lv_obj_add_flag(card.icon_tile,LV_OBJ_FLAG_HIDDEN);
+          lv_obj_add_flag(card.name,LV_OBJ_FLAG_HIDDEN);
+          lv_obj_add_flag(card.status,LV_OBJ_FLAG_HIDDEN);
+          lv_obj_clear_flag(card.obj,LV_OBJ_FLAG_CLICKABLE);
+        }
+        if(composite_purifier) {
+          // Dedicated metric region, above the bottom fan slider.
+          const int inset=responsive.size(12);
+          const int metric_top=metrics_top;
+          const int cell_gap=responsive.size(8);
+          const int metric_cols=2;
+          const int cell_w=(card_width-2*inset-cell_gap)/metric_cols;
+          const int cell_h=responsive.size(57);
+          int index=0;
+          for(const Entity *metric:composite_block->items) {
+            if(metric==&e && !uniform_composite) continue;
+
+            const bool last_single=(composite_count%2)==1 && index==composite_count-1;
+            const int mx=inset+(index%metric_cols)*(cell_w+cell_gap);
+            const int my=metric_top+(index/metric_cols)*(cell_h+cell_gap);
+            auto *tile=lv_obj_create(card.obj);
+            lv_obj_set_pos(tile,mx,my);
+            lv_obj_set_size(tile,last_single?card_width-2*inset:cell_w,cell_h);
+            lv_obj_set_style_pad_all(tile,responsive.size(6),0);
+            lv_obj_set_style_radius(tile,responsive.size(9),0);
+            lv_obj_set_style_border_width(tile,0,0);
+            lv_obj_set_style_bg_color(tile,lv_color_hex(0x19354D),0);
+            lv_obj_clear_flag(tile,LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_clear_flag(tile,LV_OBJ_FLAG_CLICKABLE);
+            // Distinct semantic icon and two-line typography.
+            const bool temp=metric->device_class=="temperature";
+            const bool humid=metric->device_class=="humidity";
+            const bool particulate=metric->device_class=="pm25" ||
+                metric->name.find("PM2")!=std::string::npos ||
+                metric->name.find("pm2")!=std::string::npos;
+            const uint32_t accent=temp?0xF4B35C:humid?0x55C9EE:particulate?0x8FCB93:0x91B5E8;
+            const bool lux=metric->device_class=="illuminance";
+            const bool pressure=metric->device_class=="atmospheric_pressure" ||
+                metric->device_class=="pressure";
+            const bool wind=metric->device_class=="speed" ||
+                metric->name.find("vento")!=std::string::npos;
+            const bool mdi_metric=temp || humid || particulate;
+            const char *glyph=temp?"\xF3\xB0\x94\x90":
+                humid?"\xF3\xB0\x96\x8E":
+                particulate?"\xF3\xB0\xB5\x83":
+                lux?"L":
+                pressure?"P":
+                wind?"V":
+                metric->domain=="switch" || metric->domain=="input_boolean"?LV_SYMBOL_POWER:
+                metric->domain=="light"?LV_SYMBOL_EYE_OPEN:metric->domain=="button"?LV_SYMBOL_OK:
+                metric->domain=="fan"?LV_SYMBOL_REFRESH:LV_SYMBOL_SETTINGS;
+            auto *symbol=make_label(tile,0,responsive.size(12),responsive.size(25),glyph);
+            lv_obj_set_style_text_font(symbol,mdi_metric?hmh_mdi_font:hmh_runtime_text_20,0);
+            lv_obj_set_style_text_color(symbol,lv_color_hex(accent),0);
+            std::string short_name=metric->name;
+            if(!metric->device_name.empty() &&
+               short_name.size()>metric->device_name.size() &&
+               short_name.compare(0,metric->device_name.size(),metric->device_name)==0) {
+              short_name.erase(0,metric->device_name.size());
+              const auto begin=short_name.find_first_not_of(" -_:|/");
+              if(begin!=std::string::npos) short_name.erase(0,begin);
+              if(short_name.empty()) short_name=metric->name;
+            }
+            auto *title=make_label(tile,responsive.size(28),responsive.size(2),(last_single?card_width-2*inset:cell_w)-responsive.size(42),
+                temp?"Temperatura":humid?"Umidita'":particulate?"PM2.5":short_name.c_str());
+            lv_obj_set_style_text_font(title,hmh_chip_text_14,0);
+            lv_obj_set_style_text_color(title,lv_color_hex(0x94B7CE),0);
+            lv_label_set_long_mode(title,LV_LABEL_LONG_DOT);
+            lv_obj_set_height(title,responsive.size(20));
+            auto *value=make_label(tile,responsive.size(28),responsive.size(25),(last_single?card_width-2*inset:cell_w)-responsive.size(42),"--");
+            lv_obj_set_style_text_font(value,hmh_runtime_text_20,0);
+            lv_obj_set_style_text_color(value,lv_color_hex(0xF2F8FE),0);
+            lv_label_set_long_mode(value,LV_LABEL_LONG_DOT);
+            card.composite_metrics.push_back({metric->id,value});
+            if(metric->domain=="switch" || metric->domain=="light" ||
+               metric->domain=="input_boolean" || metric->domain=="button" ||
+               metric->domain=="fan" || metric->domain=="climate") {
+              card.composite_controls.push_back({metric->id,tile});
+              lv_obj_add_flag(tile,LV_OBJ_FLAG_CLICKABLE);
+              lv_obj_add_event_cb(tile,[](lv_event_t *event) {
+                auto *self=static_cast<RoomDevices *>(lv_event_get_user_data(event));
+                if(!self->online_ || hmh_navigation_blocked) return;
+                lv_obj_t *target=static_cast<lv_obj_t *>(lv_event_get_target(event));
+                for(const auto &card:self->cards_) for(const auto &control:card.composite_controls) {
+                  if(control.second!=target) continue;
+                  const Entity *child=self->find(control.first);
+                  if(!child || !self->available(*child)) return;
+                  if(child->domain=="climate") {self->open_climate(*child);return;}
+                  if(child->domain=="light" && (child->brightness_supported || child->color_supported)) {
+                    self->open_detail(*child);return;
+                  }
+                  if(!self->on_command) return;
+                  const std::string action=child->domain=="button"?"button.press":
+                      child->domain+(child->state=="on"?".turn_off":".turn_on");
+                  self->on_command(action,child->id);
+                  return;
+                }
+              },LV_EVENT_CLICKED,this);
+            }
+            ++index;
+          }
         }
         if(e.has_battery) {card.battery.create(card.obj,e.battery_entity?12:card_width-72,e.battery_entity?78:2,!e.battery_entity);if(e.battery_entity) lv_obj_add_flag(card.status,LV_OBJ_FLAG_HIDDEN);}
         lv_obj_add_event_cb(card.obj, [](lv_event_t *event) {
@@ -1751,6 +1979,12 @@ class RoomDevices {
     else hint = std::to_string(all_selected.size()) + (all_selected.size() == 1 ? " dispositivo" : " dispositivi");
     if (!online_) hint += " | API offline";
     lv_label_set_text(hint_, hint.c_str());
+    // The count overlaps the category heading when the list starts high.
+    // Keep it accessible for empty/offline states; normal views use heading counts.
+    if (received_ && !all_selected.empty() && online_)
+      lv_obj_add_flag(hint_, LV_OBJ_FLAG_HIDDEN);
+    else
+      lv_obj_clear_flag(hint_, LV_OBJ_FLAG_HIDDEN);
     for (size_t i = 0; i < selected.size(); ++i) {
       auto &card = cards_[i];
       const auto &e = *selected[i];
@@ -1767,6 +2001,8 @@ class RoomDevices {
       else lv_obj_add_state(card.obj, LV_STATE_DISABLED);
       if (read_only && e.domain!="sensor") lv_obj_clear_flag(card.obj, LV_OBJ_FLAG_CLICKABLE);
       else lv_obj_add_flag(card.obj, LV_OBJ_FLAG_CLICKABLE);
+      if(card.uniform_composite && !card.composite_controls.empty() && (e.domain=="switch" || e.domain=="input_boolean"))
+        lv_obj_clear_flag(card.obj,LV_OBJ_FLAG_CLICKABLE);
       std::string status = status_text(e);
       if (available(e)) {
         if (e.domain == "light") {
@@ -1778,6 +2014,38 @@ class RoomDevices {
       }
       if(is_contact(e)) status.clear();
       lv_label_set_text(card.status, status.c_str());
+      if(card.uniform_composite && !card.composite_metrics.empty()) {
+        lv_obj_add_flag(card.name,LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(card.status,LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(card.icon_tile,LV_OBJ_FLAG_HIDDEN);
+      }
+      for(const auto &metric:card.composite_metrics) {
+        const Entity *child=find(metric.first);
+        if(!child) continue;
+        std::string caption=status_text(*child);
+        if(child->domain=="switch" || child->domain=="light" || child->domain=="input_boolean") caption=child->state=="on"?"Acceso":"Spento";
+        lv_label_set_text(metric.second,caption.c_str());
+      }
+      // Gaia 0.8.15: colour switch tiles according to live HA state.
+      // The tile owns icon, title and value, in that order. Style only switch
+      // and input_boolean children; keep sensors and other controls unchanged.
+      for(const auto &control:card.composite_controls) {
+        const Entity *child=find(control.first);
+        if(!child || (child->domain!="switch" && child->domain!="input_boolean")) continue;
+        lv_obj_t *tile=control.second;
+        const bool active=child->state=="on";
+        const bool known=available(*child);
+        const uint32_t icon_color=!known?0x8195A5:active?0xF4C46D:0x8195A5;
+        const uint32_t tile_color=!known?0x1A2937:active?0x20433F:0x19354D;
+        lv_obj_set_style_bg_color(tile,lv_color_hex(tile_color),0);
+        lv_obj_set_style_border_width(tile,active && known?1:0,0);
+        lv_obj_set_style_border_color(tile,lv_color_hex(0x477D66),0);
+        if(lv_obj_get_child_cnt(tile)>=3) {
+          lv_obj_set_style_text_color(lv_obj_get_child(tile,0),lv_color_hex(icon_color),0);
+          lv_obj_set_style_text_color(lv_obj_get_child(tile,2),
+              lv_color_hex(!known?0x8195A5:active?0xF5F9FC:0xB6C6D3),0);
+        }
+      }
       lv_obj_set_style_text_color(card.status, hmh_color(0xCBD5E1), 0);
       if (e.domain == "cover") {
         lv_label_set_text(card.icon, cover_icon(e));
@@ -1867,11 +2135,27 @@ class RoomDevices {
         lv_obj_set_x(card.status, show_rgb ? 96 : 70);
         lv_obj_set_width(card.status, card.width - (show_rgb ? 108 : 82));
       }
-      lv_obj_set_style_bg_color(card.obj, hmh_color(0x1E293B), 0);
+      lv_obj_set_style_bg_color(card.obj, lv_color_hex(0x10273D), 0);
       lv_obj_set_style_bg_opa(card.obj, LV_OPA_COVER, 0);
       lv_obj_set_style_border_color(card.obj, hmh_color(0x334155), 0);
       lv_obj_set_style_text_opa(card.name, LV_OPA_COVER, 0);
       lv_obj_set_style_text_opa(card.status, LV_OPA_COVER, 0);
+      if (card.gaia_scale) {
+        const bool barometer=(e.device_class=="atmospheric_pressure" || e.unit=="hPa" || e.unit=="mbar");
+        const float reading=std::strtof(e.state.c_str(),nullptr);
+        const bool numeric=!e.state.empty() && std::isfinite(reading) && (std::isdigit(static_cast<unsigned char>(e.state[0])) || e.state[0]=='-' || e.state[0]=='+');
+        // Percent values have a natural 0..100 range; pressure is mapped to a
+        // barometric 980..1040 hPa reference band, NOT a rain forecast.
+        const float pressure_hpa=e.unit=="kPa"?reading*10.0f:reading;
+        const float fraction=barometer?(pressure_hpa-980.0f)/60.0f:reading/100.0f;
+        if(numeric) {
+          lv_bar_set_value(card.gaia_scale,std::clamp(static_cast<int>(std::lround(fraction*1000.0f)),0,1000),LV_ANIM_OFF);
+          lv_obj_clear_flag(card.gaia_scale,LV_OBJ_FLAG_HIDDEN);
+        } else lv_obj_add_flag(card.gaia_scale,LV_OBJ_FLAG_HIDDEN);
+        if(card.gaia_scale_caption) {
+          lv_label_set_text(card.gaia_scale_caption, numeric?(pressure_hpa<1000?"Bassa pressione":pressure_hpa>1020?"Alta pressione":"Pressione intermedia"):"Pressione non disponibile");
+        }
+      }
       // Binary sensor resta una scheda di sola lettura ma a luminosita' piena.
       lv_obj_set_style_bg_opa(card.obj, LV_OPA_COVER, LV_STATE_DISABLED);
       lv_obj_set_style_bg_color(card.obj, hmh_color(0x1E293B), LV_STATE_DISABLED);
@@ -1993,7 +2277,8 @@ class HmhCalendar {
     std::vector<Event> incoming;int ry=0,rm=0;bool ok=esphome::json::parse_json(hmh_json(payload),[&](JsonObject root)->bool{
       ry=root["year"]|0;rm=root["month"]|0;
       if(!root["events"].is<JsonArray>())return false;
-      for(JsonObject v:root["events"].as<JsonArray>()){
+      JsonArray events_array=root["events"].as<JsonArray>();
+      for(JsonObject v:events_array){
         Event e;e.start=v["s"].as<std::string>();e.end=v["e"].as<std::string>();e.title=v["t"].as<std::string>();e.source=v["c"].as<std::string>();e.all_day=v["a"]|false;
         if(!e.start.empty()&&incoming.size()<120)incoming.push_back(std::move(e));
       }return true;
@@ -2128,7 +2413,8 @@ class RoomSidebar {
   bool categories_mode() const { return categories_; }
   bool navigation_area(const lv_point_t &point) const {
     if(!devices_) return false;
-    return point.x>=lv_obj_get_x(devices_) && point.x<800 && point.y>=54 && point.y<480;
+    const auto metrics=HmhLayout::current();
+    return point.x>=lv_obj_get_x(devices_) && point.x<metrics.width && point.y>=metrics.status_height() && point.y<metrics.height;
   }
   int page_mode() const {return calendar_?4:energy_?3:batteries_?2:categories_?1:0;}
   bool settings_open() const { return settings_; }
@@ -2160,7 +2446,7 @@ class RoomSidebar {
   void set_theme_mode(int mode) { theme_mode_ = mode >= 0 && mode <= 2 ? mode : 0; }
   void update_theme(int hour, bool valid) {
     last_hour_ = hour; time_valid_ = valid;
-    bool dark = theme_mode_ == 1 || (theme_mode_ == 2 && valid && (hour >= 20 || hour < 7));
+    bool dark = true; // Gaia preview keeps a navy palette
     if (theme_applied_ && dark == hmh_dark) return;
     hmh_dark = dark; theme_applied_ = true;
     auto *root = lv_obj_get_parent(sidebar_);
@@ -2203,22 +2489,27 @@ class RoomSidebar {
     icon_font_ = icon_font;
     hmh_mdi_font = icon_font;
     update_settings_button();
+    toggle_collapsed(); // Gaia: compact sidebar on boot
   }
   void toggle_collapsed() {
     if (!sidebar_) return;
-    collapsed_ = !collapsed_;
-    const int sidebar_width = collapsed_ ? 82 : 200;
-    const int right_x = sidebar_width + 14;
-    const int right_width = 800 - right_x - 12;
+    collapsed_ = true; // Gaia: always show icons without expanded labels
+    const HmhLayout metrics = HmhLayout::current();
+    const int sidebar_width = metrics.sidebar_width();
+    const int right_x = metrics.content_left();
+    const int right_width = metrics.content_width();
     lv_obj_set_width(sidebar_, sidebar_width);
-    lv_obj_set_width(list_, sidebar_width - 16);
+    lv_obj_set_width(list_, sidebar_width - metrics.size(16));
+    lv_obj_set_style_pad_all(list_, 0, 0);
     if (collapsed_) lv_obj_add_flag(heading_, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_clear_flag(heading_, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_set_x(settings_button_, collapsed_ ? 8 : 12);
-    lv_obj_set_width(settings_button_, collapsed_ ? 66 : 176);
+    lv_obj_set_x(settings_button_, metrics.size(8));
+    lv_obj_set_width(settings_button_, metrics.size(44));
+    lv_obj_set_style_pad_all(settings_button_, 0, 0);
+    lv_obj_align(settings_label_, LV_ALIGN_CENTER, 0, 0);
     update_settings_button();
     lv_label_set_text(toggle_label_, collapsed_ ? ">" : "<");
-    lv_obj_set_x(lv_obj_get_parent(toggle_label_),collapsed_?24:8);
+    lv_obj_add_flag(lv_obj_get_parent(toggle_label_), LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_x(title_, right_x + 8);
     lv_obj_set_width(title_, right_width - 8);
     lv_obj_set_x(hint_, right_x + 8);
@@ -2226,7 +2517,7 @@ class RoomSidebar {
     lv_obj_set_x(devices_, right_x);
     lv_obj_set_width(devices_, right_width);
     for (auto &room : rooms_) {
-      lv_obj_set_width(room.button, collapsed_ ? 66 : 168);
+      lv_obj_set_width(room.button, metrics.size(44));
       if (collapsed_) lv_obj_add_flag(room.name_label, LV_OBJ_FLAG_HIDDEN);
       else lv_obj_clear_flag(room.name_label, LV_OBJ_FLAG_HIDDEN);
       lv_obj_align(room.icon_label, collapsed_ ? LV_ALIGN_CENTER : LV_ALIGN_LEFT_MID, collapsed_ ? 0 : 10, 0);
@@ -2289,7 +2580,7 @@ class RoomSidebar {
     for (auto &room : rooms_) {
       room.button = lv_btn_create(list_);
       lv_obj_set_pos(room.button, 0, y);
-      lv_obj_set_size(room.button, collapsed_ ? 66 : 168, 58);
+      lv_obj_set_size(room.button, HmhLayout::current().size(44), HmhLayout::current().size(48));
       lv_obj_set_style_pad_all(room.button, 0, 0);
       lv_obj_set_style_radius(room.button, 12, 0);
       lv_obj_set_style_bg_color(room.button, hmh_color(0x1E293B), 0);
@@ -2318,7 +2609,7 @@ class RoomSidebar {
           if (entry.button == target) { self->select(entry.id); break; }
         }
       }, LV_EVENT_CLICKED, this);
-      y += 66;
+      y += HmhLayout::current().size(56);
     }
     bool found = false;
     for (const auto &room : rooms_) if (room.id == selected_) found = true;
@@ -2326,8 +2617,8 @@ class RoomSidebar {
     if (rooms_.empty()) {
       selected_.clear();
       lv_obj_t *empty = lv_label_create(list_);
-      lv_obj_set_width(empty, collapsed_ ? 62 : 166);
-      lv_label_set_text(empty, categories_ ? "Nessuna categoria" : "Nessuna stanza visibile");
+      lv_obj_set_width(empty, HmhLayout::current().size(38));
+      lv_label_set_text(empty, "—");
       lv_label_set_long_mode(empty, LV_LABEL_LONG_WRAP);
       lv_obj_set_style_text_font(empty, hmh_runtime_text_20, 0);
       lv_label_set_text(title_, categories_ ? "Categorie" : "Nessuna stanza");

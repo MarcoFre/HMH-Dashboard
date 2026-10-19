@@ -1,4 +1,16 @@
 # HMH Hardware Waveshare ESP32-S3-Touch-LCD-7 V1
+# Esperimento isolato Gaia RGB: driver ESPHome 2026.9.1 con
+# bounce buffer DMA in SRAM da 16 righe (stock: 10).
+# Per tornare al driver standard, rimuovere questo blocco.
+external_components:
+  - source:
+      type: git
+      url: https://github.com/MarcoFre/HMH-Dashboard
+      ref: feature/gaia-06-responsive
+      path: esphome/rgb_test_components
+    components: [mipi_rgb]
+    refresh: 0s
+
 esp32:
   board: esp32-s3-devkitc-1
   variant: esp32s3
@@ -22,7 +34,8 @@ psram:
 
 ota:
   - platform: esphome
-    password: !secret ota_password
+    # ESPHome 2026.9+: cifra OTA riutilizzando la chiave api.encryption.
+    encryption:
     on_begin:
       - lambda: hmh_boot_ota.begin();
     on_progress:
@@ -90,7 +103,8 @@ display:
   - id: my_display
     platform: mipi_rgb
     model: ESP32-S3-TOUCH-LCD-7-800X480
-    # Riduce la banda video richiesta alla PSRAM (preset originale: 16MHz).
+    # Ripristinato il valore Waveshare precedente: il test a 10 MHz
+    # ha causato perdita del video / possibile modalita' test RGB del pannello.
     pclk_frequency: 12MHz
     color_order: RGB
     update_interval: never
