@@ -34,7 +34,8 @@ psram:
 
 ota:
   - platform: esphome
-    password: !secret ota_password
+    # ESPHome 2026.9+: cifra OTA riutilizzando la chiave api.encryption.
+    encryption:
     on_begin:
       - lambda: hmh_boot_ota.begin();
     on_progress:
