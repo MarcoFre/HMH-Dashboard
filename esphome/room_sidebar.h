@@ -268,6 +268,7 @@ class RoomDevices {
     float requested = NAN;
     uint32_t requested_at = 0;
     lv_obj_t *room_label = nullptr, *pm25_label = nullptr, *speed_bar = nullptr;
+    std::vector<std::pair<std::string, lv_obj_t *>> composite_metrics;
     lv_obj_t *gaia_scale = nullptr, *gaia_scale_caption = nullptr;
     lv_obj_t *obj = nullptr, *name = nullptr, *status = nullptr, *lamp = nullptr, *lamp_base = nullptr;
   };
@@ -1488,6 +1489,18 @@ class RoomDevices {
         return hmh_widget_layout.entity_rank(a->id)<hmh_widget_layout.entity_rank(b->id);
       });
     }
+    // Gaia 0.8 pilot: one purifier card per real HA device. Only sensor
+    // children join it; unrelated domains stay individually controllable.
+    for(auto &block:device_blocks_) {
+      auto primary=std::find_if(block.items.begin(),block.items.end(),
+          [](const Entity *e){return e->domain=="fan" && e->purifier;});
+      if(primary!=block.items.end() && block.grouped) {
+        const Entity *fan=*primary;
+        block.items.erase(primary);
+        block.items.insert(block.items.begin(),fan);
+        block.group=section(*fan);
+      }
+    }
     std::stable_sort(device_blocks_.begin(),device_blocks_.end(),[&](const DeviceBlock &a,const DeviceBlock &b){
       if(a.group!=b.group) return categories?a.group<b.group:
         hmh_widget_layout.category_rank(area_,a.group)<hmh_widget_layout.category_rank(area_,b.group);
@@ -1496,7 +1509,14 @@ class RoomDevices {
     selected.clear();std::string signature;
     for(const auto &block:device_blocks_) {
       signature+=block.key+"|"+block.items[0]->device_name+";";
-      for(const auto *e:block.items) {selected.push_back(e);signature+=e->has_battery?"B":"N";for(const auto &mode:e->alarm_modes) signature+=mode+",";}
+      const bool composite=block.grouped && !block.items.empty() &&
+          block.items[0]->domain=="fan" && block.items[0]->purifier;
+      for(const auto *e:block.items) {
+        // Sensor children are drawn inside the parent's card.
+        if(!composite || e==block.items[0] || e->domain!="sensor") selected.push_back(e);
+        signature+=e->id+";";signature+=e->has_battery?"B":"N";
+        for(const auto &mode:e->alarm_modes) signature+=mode+",";
+      }
     }
     if(signature!=groups_signature_) {layout_dirty_=true;groups_signature_=signature;}
     auto all_selected = selected;
@@ -1575,8 +1595,13 @@ class RoomDevices {
             (e.domain=="light" && e.brightness_supported) ||
             (e.domain=="fan" && e.speed_supported) ||
             (is_number(e) && number_range(e));
-        const int requested_columns=is_alarm?4:2;
-        const int requested_rows=is_alarm?(e.alarm_modes.size()>3?6:5)
+        const auto composite_key=device_key(e);
+        const auto composite_block=std::find_if(device_blocks_.begin(),device_blocks_.end(),
+            [&](const DeviceBlock &b){return b.grouped && b.key==composite_key &&
+                !b.items.empty() && b.items[0]==&e && e.domain=="fan" && e.purifier;});
+        const bool composite_purifier=composite_block!=device_blocks_.end();
+        const int requested_columns=(is_alarm || composite_purifier)?4:2;
+        const int requested_rows=composite_purifier?5:is_alarm?(e.alarm_modes.size()>3?6:5)
             :has_control?3:(e.domain=="sensor" || categories || tall_card(e))?3:2;
         const auto slot=tile_grid.place(requested_columns,requested_rows);
         const int card_width=slot.w;
@@ -1798,6 +1823,21 @@ class RoomDevices {
           lv_obj_set_style_bg_opa(bar,LV_OPA_COVER,LV_PART_MAIN);
           lv_obj_set_style_bg_opa(bar,LV_OPA_COVER,LV_PART_INDICATOR);
         }
+        if(composite_purifier) {
+          const int x0=responsive.size(12);
+          const int y0=responsive.size(72);
+          const int line=responsive.size(27);
+          int index=0;
+          for(const Entity *metric:composite_block->items) {
+            if(metric==&e || metric->domain!="sensor") continue;
+            if(index>=3) break; // Pilot shows three primary metrics; other sensors remain in the catalog.
+            auto *label=make_label(card.obj,x0,y0+index*line,card_width-2*x0,"");
+            lv_obj_set_style_text_font(label,hmh_runtime_text_16,0);
+            lv_obj_set_style_text_color(label,lv_color_hex(0xC8E5F4),0);
+            card.composite_metrics.push_back({metric->id,label});
+            ++index;
+          }
+        }
         if(e.has_battery) {card.battery.create(card.obj,e.battery_entity?12:card_width-72,e.battery_entity?78:2,!e.battery_entity);if(e.battery_entity) lv_obj_add_flag(card.status,LV_OBJ_FLAG_HIDDEN);}
         lv_obj_add_event_cb(card.obj, [](lv_event_t *event) {
           auto *self = static_cast<RoomDevices *>(lv_event_get_user_data(event));
@@ -1850,6 +1890,12 @@ class RoomDevices {
       }
       if(is_contact(e)) status.clear();
       lv_label_set_text(card.status, status.c_str());
+      for(const auto &metric:card.composite_metrics) {
+        const Entity *child=find(metric.first);
+        if(!child) continue;
+        std::string caption=child->name+": "+status_text(*child);
+        lv_label_set_text(metric.second,caption.c_str());
+      }
       lv_obj_set_style_text_color(card.status, hmh_color(0xCBD5E1), 0);
       if (e.domain == "cover") {
         lv_label_set_text(card.icon, cover_icon(e));
