@@ -103,9 +103,9 @@ display:
   - id: my_display
     platform: mipi_rgb
     model: ESP32-S3-TOUCH-LCD-7-800X480
-    # Ripristinato il valore Waveshare precedente: il test a 10 MHz
-    # ha causato perdita del video / possibile modalita' test RGB del pannello.
-    pclk_frequency: 12MHz
+    # Prova fluidita' touch: clock RGB standard Waveshare 16 MHz.
+    # Bounce buffer sperimentale 16 righe invariato.
+    pclk_frequency: 16MHz
     color_order: RGB
     update_interval: never
     auto_clear_enabled: false
