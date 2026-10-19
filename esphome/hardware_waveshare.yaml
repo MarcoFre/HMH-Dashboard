@@ -90,8 +90,9 @@ display:
   - id: my_display
     platform: mipi_rgb
     model: ESP32-S3-TOUCH-LCD-7-800X480
-    # Riduce la banda video richiesta alla PSRAM (preset originale: 16MHz).
-    pclk_frequency: 12MHz
+    # Gaia 0.8.18: test anti-flicker RGB, riduce la richiesta DMA/PSRAM.
+    # Prova isolata: nessuna modifica a LVGL, timing o driver Sunton.
+    pclk_frequency: 10MHz
     color_order: RGB
     update_interval: never
     auto_clear_enabled: false
