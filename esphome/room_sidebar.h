@@ -403,7 +403,8 @@ class RoomDevices {
         e.name = item["name"].as<const char *>();
         e.state = item["state"].as<const char *>();
         e.code_format=item["code_format"] | "";e.code_arm_required=item["code_arm_required"] | true;e.code_disarm_required=item["code_disarm_required"] | false;
-        for(JsonVariant mode:item["alarm_modes"].as<JsonArray>()) if(mode.is<const char *>()) e.alarm_modes.push_back(mode.as<const char *>());
+        JsonArray alarm_modes_array=item["alarm_modes"].as<JsonArray>();
+        for(JsonVariant mode:alarm_modes_array) if(mode.is<const char *>()) e.alarm_modes.push_back(mode.as<const char *>());
         e.has_battery=item["has_battery"] | false;e.battery_known=item["battery_known"] | false;e.battery_low=item["battery_low"] | false;
         e.battery_only=item["battery_only"] | false;e.battery_entity=item["battery_entity"] | false;e.battery_level=item["battery_level"].is<float>()?item["battery_level"].as<float>():NAN;
         e.chip=item["chip"] | false;e.group_section=item["group_section"] | -1;
@@ -1886,18 +1887,18 @@ class RoomDevices {
                 metric->device_class=="pressure";
             const bool wind=metric->device_class=="speed" ||
                 metric->name.find("vento")!=std::string::npos;
-            const bool mdi_metric=temp || humid || particulate || lux || pressure || wind;
+            const bool mdi_metric=temp || humid || particulate;
             const char *glyph=temp?"\xF3\xB0\x94\x90":
                 humid?"\xF3\xB0\x96\x8E":
                 particulate?"\xF3\xB0\xB5\x83":
-                lux?"\xF3\xB0\x96\xA8":
-                pressure?"\xF3\xB0\x8A\x9A":
-                wind?"\xF3\xB0\x96\x9D":
+                lux?"L":
+                pressure?"P":
+                wind?"V":
                 metric->domain=="switch" || metric->domain=="input_boolean"?LV_SYMBOL_POWER:
                 metric->domain=="light"?LV_SYMBOL_EYE_OPEN:metric->domain=="button"?LV_SYMBOL_OK:
                 metric->domain=="fan"?LV_SYMBOL_REFRESH:LV_SYMBOL_SETTINGS;
             auto *symbol=make_label(tile,0,responsive.size(12),responsive.size(25),glyph);
-            lv_obj_set_style_text_font(symbol,mdi_metric?hmh_metric_icons_20:hmh_runtime_text_20,0);
+            lv_obj_set_style_text_font(symbol,mdi_metric?hmh_mdi_font:hmh_runtime_text_20,0);
             lv_obj_set_style_text_color(symbol,lv_color_hex(accent),0);
             std::string short_name=metric->name;
             if(!metric->device_name.empty() &&
@@ -2244,7 +2245,8 @@ class HmhCalendar {
     std::vector<Event> incoming;int ry=0,rm=0;bool ok=esphome::json::parse_json(hmh_json(payload),[&](JsonObject root)->bool{
       ry=root["year"]|0;rm=root["month"]|0;
       if(!root["events"].is<JsonArray>())return false;
-      for(JsonObject v:root["events"].as<JsonArray>()){
+      JsonArray events_array=root["events"].as<JsonArray>();
+      for(JsonObject v:events_array){
         Event e;e.start=v["s"].as<std::string>();e.end=v["e"].as<std::string>();e.title=v["t"].as<std::string>();e.source=v["c"].as<std::string>();e.all_day=v["a"]|false;
         if(!e.start.empty()&&incoming.size()<120)incoming.push_back(std::move(e));
       }return true;
