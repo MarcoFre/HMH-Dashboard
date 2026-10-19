@@ -1810,10 +1810,10 @@ class RoomDevices {
         if(e.purifier) {
           card.pm25_label=make_label(card.obj,12,categories?80:68,card_width-24,"");
           lv_obj_set_height(card.pm25_label,20);
-          if(card.slider) {lv_obj_set_y(card.slider,categories?103:90);lv_obj_set_height(card.slider,categories?18:30);}
+          if(card.slider) {lv_obj_set_y(card.slider,composite_purifier?responsive.size(100):(categories?103:90));lv_obj_set_height(card.slider,composite_purifier?responsive.size(30):(categories?18:30));}
           else {
-            card.speed_bar=lv_bar_create(card.obj);lv_obj_set_pos(card.speed_bar,12,categories?103:90);
-            lv_obj_set_size(card.speed_bar,card_width-24,categories?18:30);lv_bar_set_range(card.speed_bar,0,100);
+            card.speed_bar=lv_bar_create(card.obj);lv_obj_set_pos(card.speed_bar,12,composite_purifier?responsive.size(100):(categories?103:90));
+            lv_obj_set_size(card.speed_bar,card_width-24,composite_purifier?responsive.size(30):(categories?18:30));lv_bar_set_range(card.speed_bar,0,100);
             lv_obj_clear_flag(card.speed_bar,LV_OBJ_FLAG_CLICKABLE);
           }
           auto *bar=card.slider?card.slider:card.speed_bar;
@@ -1826,7 +1826,7 @@ class RoomDevices {
         if(composite_purifier) {
           // Dedicated metric region, above the bottom fan slider.
           const int inset=responsive.size(12);
-          const int metric_top=responsive.size(88);
+          const int metric_top=responsive.size(145);
           const int cell_gap=responsive.size(8);
           const int metric_cols=2;
           const int cell_w=(card_width-2*inset-cell_gap)/metric_cols;
