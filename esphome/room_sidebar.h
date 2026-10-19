@@ -1621,8 +1621,15 @@ class RoomDevices {
             std::max(0,metric_rows-1)*responsive.size(8);
         const int content_bottom=metric_rows?metrics_bottom+responsive.size(12):metrics_top+responsive.size(12);
         const int tile_pitch=responsive.size(40)+gap;
-        const int composite_rows=std::max(3,(content_bottom+gap+tile_pitch-1)/tile_pitch);
-        const int requested_rows=composite_purifier?composite_rows:is_alarm?(e.alarm_modes.size()>3?6:5)
+        // Uniform grids contain only metric tiles: two rows need no hero-sized minimum.
+        const int composite_rows=std::max(uniform_composite?2:3,
+            (content_bottom+gap+tile_pitch-1)/tile_pitch);
+        // Alarm actions start at y=78/88, with 42 px row pitch and 34 px buttons.
+        // Include the final disarm row, then reserve a small bottom breathing space.
+        const int alarm_action_rows=(static_cast<int>(e.alarm_modes.size())+2)/3;
+        const int alarm_bottom=(categories?88:78)+alarm_action_rows*42+34+12;
+        const int alarm_rows=std::max(3,(alarm_bottom+gap+tile_pitch-1)/tile_pitch);
+        const int requested_rows=composite_purifier?composite_rows:is_alarm?alarm_rows
             :has_control?3:(e.domain=="sensor" || categories || tall_card(e))?3:2;
         const auto slot=tile_grid.place(requested_columns,requested_rows);
         const int card_width=slot.w;
