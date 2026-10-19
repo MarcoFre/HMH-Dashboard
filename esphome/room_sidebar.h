@@ -1618,29 +1618,42 @@ class RoomDevices {
           lv_obj_set_style_text_color(card.room_label, hmh_color(0x94A3B8), 0);
         }
         if (e.domain == "sensor" || e.domain == "binary_sensor") {
-          // Gaia: compact sensor header, prominent value, no overlapping text.
-          lv_obj_set_y(card.name, 10);
-          lv_obj_set_height(card.name, 42);
+          // Gaia 0.7.2: place each section relative to the tile slot, not
+          // to a fixed 130px card. Reserve header, value and optional footer.
+          const HmhLayout cell_metrics=HmhLayout::current();
+          const int inset=cell_metrics.size(12);
+          const int header_height=cell_metrics.size(40);
+          const int value_y=inset+header_height+cell_metrics.size(5);
+          lv_obj_set_pos(card.icon_tile,inset,inset);
+          lv_obj_set_size(card.icon_tile,cell_metrics.size(38),cell_metrics.size(38));
+          if(card.icon) {
+            lv_obj_set_width(card.icon,cell_metrics.size(38));
+            lv_obj_center(card.icon);
+          }
+          lv_obj_set_pos(card.name,inset+cell_metrics.size(46),inset);
+          lv_obj_set_width(card.name,std::max(30,card_width-inset*2-cell_metrics.size(46)));
+          lv_obj_set_height(card.name,header_height);
           lv_label_set_long_mode(card.name, LV_LABEL_LONG_DOT);
-          lv_obj_set_pos(card.status, 16, 69);
-          lv_obj_set_width(card.status, card_width - 32);
-          lv_obj_set_height(card.status, 30);
-          lv_obj_set_style_text_font(card.status, e.domain == "sensor" ? hmh_runtime_text_28 : hmh_runtime_text_20, 0);
+          lv_obj_set_pos(card.status,inset,value_y);
+          lv_obj_set_width(card.status,std::max(30,card_width-inset*2));
+          lv_obj_set_height(card.status,cell_metrics.size(33));
+          lv_obj_set_style_text_font(card.status,
+              (e.domain=="sensor" && card_width>=cell_metrics.size(225))?hmh_runtime_text_28:hmh_runtime_text_20,0);
           lv_obj_set_style_text_color(card.status, lv_color_hex(0xD6F3FF), 0);
           if (e.domain == "sensor") {
             const bool percentage=(e.unit=="%" && (e.device_class=="humidity" || e.device_class=="battery"));
             const bool barometer=(e.device_class=="atmospheric_pressure" || e.unit=="hPa" || e.unit=="mbar");
             if (percentage || barometer) {
               card.gaia_scale=lv_bar_create(card.obj);
-              lv_obj_set_pos(card.gaia_scale,16,122);
-              lv_obj_set_size(card.gaia_scale,card_width-32,4);
+              lv_obj_set_pos(card.gaia_scale,inset,card_height-cell_metrics.size(10));
+              lv_obj_set_size(card.gaia_scale,card_width-inset*2,cell_metrics.size(4));
               lv_bar_set_range(card.gaia_scale,0,1000);
               lv_obj_set_style_radius(card.gaia_scale,LV_RADIUS_CIRCLE,LV_PART_MAIN);
               lv_obj_set_style_radius(card.gaia_scale,LV_RADIUS_CIRCLE,LV_PART_INDICATOR);
               lv_obj_set_style_bg_color(card.gaia_scale,lv_color_hex(0x29455B),LV_PART_MAIN);
               lv_obj_set_style_bg_color(card.gaia_scale,lv_color_hex(barometer?0x4DAEED:0x30C9DD),LV_PART_INDICATOR);
               if (barometer) {
-                card.gaia_scale_caption=make_label(card.obj,16,100,card_width-32,"Pressione relativa");
+                card.gaia_scale_caption=make_label(card.obj,inset,card_height-cell_metrics.size(31),card_width-inset*2,"Pressione relativa");
                 lv_obj_set_style_text_font(card.gaia_scale_caption,hmh_chip_text_14,0);
                 lv_obj_set_style_text_color(card.gaia_scale_caption,lv_color_hex(0x91B3CA),0);
               }
