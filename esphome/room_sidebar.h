@@ -1514,11 +1514,11 @@ class RoomDevices {
       for(const auto *e:block.items) {
         // Sensor children are drawn inside the parent's card.
         if(!composite || e==block.items[0] || e->domain!="sensor") selected.push_back(e);
-        signature+=e->id+";";signature+=e->has_battery?"B":"N";
+        signature+=e->id+"|"+e->name+"|"+e->device_class+"|"+e->unit+";";signature+=e->has_battery?"B":"N";
         for(const auto &mode:e->alarm_modes) signature+=mode+",";
       }
     }
-    if(signature!=groups_signature_) {layout_dirty_=true;groups_signature_=signature;}
+    if(signature!=groups_signature_) {layout_dirty_=true;groups_signature_=signature;} // Device metric changes force a complete layout recalculation.
     auto all_selected = selected;
     selected.erase(std::remove_if(selected.begin(), selected.end(), [&](const Entity *e) {
       return (!categories && hmh_widget_layout.collapsed(area_,section(*e))) ||
