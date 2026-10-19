@@ -1885,10 +1885,19 @@ class RoomDevices {
                 (metric->device_class=="atmospheric_pressure" || metric->device_class=="pressure")?LV_SYMBOL_REFRESH:
                 metric->device_class=="speed"?LV_SYMBOL_UP:LV_SYMBOL_SETTINGS;
             auto *symbol=make_label(tile,0,responsive.size(12),responsive.size(25),glyph);
-            lv_obj_set_style_text_font(symbol,hmh_mdi_font,0);
+            lv_obj_set_style_text_font(symbol,(temp || humid || particulate)?hmh_mdi_font:hmh_runtime_text_20,0);
             lv_obj_set_style_text_color(symbol,lv_color_hex(accent),0);
+            std::string short_name=metric->name;
+            if(!metric->device_name.empty() &&
+               short_name.size()>metric->device_name.size() &&
+               short_name.compare(0,metric->device_name.size(),metric->device_name)==0) {
+              short_name.erase(0,metric->device_name.size());
+              const auto begin=short_name.find_first_not_of(" -_:|/");
+              if(begin!=std::string::npos) short_name.erase(0,begin);
+              if(short_name.empty()) short_name=metric->name;
+            }
             auto *title=make_label(tile,responsive.size(28),responsive.size(2),(last_single?card_width-2*inset:cell_w)-responsive.size(42),
-                temp?"Temperatura":humid?"Umidita'":particulate?"PM2.5":metric->name.c_str());
+                temp?"Temperatura":humid?"Umidita'":particulate?"PM2.5":short_name.c_str());
             lv_obj_set_style_text_font(title,hmh_chip_text_14,0);
             lv_obj_set_style_text_color(title,lv_color_hex(0x94B7CE),0);
             lv_label_set_long_mode(title,LV_LABEL_LONG_DOT);
