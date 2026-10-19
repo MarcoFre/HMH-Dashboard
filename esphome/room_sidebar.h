@@ -1667,10 +1667,14 @@ class RoomDevices {
           lv_obj_add_flag(card.rgb_dot, LV_OBJ_FLAG_HIDDEN);
         }
         if (e.domain == "cover") {
-          int w = (card_width - 40) / 3;
-          card.minus = detail_button(card.obj, 12, 78, w, 36, LV_SYMBOL_DOWN);
-          card.mode = detail_button(card.obj, 20 + w, 78, w, 36, LV_SYMBOL_PAUSE);
-          card.plus = detail_button(card.obj, 28 + w * 2, 78, w, 36, LV_SYMBOL_UP);
+          const int touch_gap=responsive.size(8);
+          const int touch_pad=responsive.size(12);
+          const int touch_height=responsive.size(36);
+          const int controls_y=card_height-touch_height-responsive.size(10);
+          int w = std::max(responsive.size(32),(card_width-2*touch_pad-2*touch_gap)/3);
+          card.minus = detail_button(card.obj,touch_pad,controls_y,w,touch_height,LV_SYMBOL_DOWN);
+          card.mode = detail_button(card.obj,touch_pad+w+touch_gap,controls_y,w,touch_height,LV_SYMBOL_PAUSE);
+          card.plus = detail_button(card.obj,touch_pad+2*(w+touch_gap),controls_y,w,touch_height,LV_SYMBOL_UP);
           for (auto *button : {card.minus, card.mode, card.plus}) {
             lv_obj_set_style_bg_color(button, hmh_color(0x334155), 0);
             lv_obj_clear_flag(button, LV_OBJ_FLAG_EVENT_BUBBLE);
@@ -1688,10 +1692,14 @@ class RoomDevices {
           }
         }
         if (e.domain == "climate") {
-          card.minus = detail_button(card.obj, 12, 78, 40, 36, "-");
-          card.plus = detail_button(card.obj, card_width - 96, 78, 40, 36, "+");
-          card.mode = detail_button(card.obj, card_width - 48, 78, 36, 36, LV_SYMBOL_SETTINGS);
-          card.target = make_label(card.obj, 56, 86, card_width - 156, "--");
+          const int control_h=responsive.size(36);
+          const int control_y=card_height-control_h-responsive.size(10);
+          const int control_pad=responsive.size(12);
+          const int control_w=responsive.size(40);
+          card.minus = detail_button(card.obj,control_pad,control_y,control_w,control_h,"-");
+          card.plus = detail_button(card.obj,card_width-control_pad-control_w*2-responsive.size(8),control_y,control_w,control_h,"+");
+          card.mode = detail_button(card.obj,card_width-control_pad-control_w,control_y,control_w,control_h,LV_SYMBOL_SETTINGS);
+          card.target = make_label(card.obj,control_pad+control_w+responsive.size(4),control_y+responsive.size(8),std::max(30,card_width-2*control_pad-3*control_w-responsive.size(16)),"--");
           lv_obj_set_style_text_align(card.target, LV_TEXT_ALIGN_CENTER, 0);
           for (auto *button : {card.minus, card.plus, card.mode}) {
             lv_obj_set_style_bg_color(button, hmh_color(0x334155), 0);
@@ -1704,8 +1712,8 @@ class RoomDevices {
         }
         if ((e.domain == "light" && e.brightness_supported) || (e.domain == "fan" && e.speed_supported)) {
           card.slider = lv_slider_create(card.obj);
-          lv_obj_set_pos(card.slider, 12, 78);
-          lv_obj_set_size(card.slider, card_width - 24, 36);
+          lv_obj_set_pos(card.slider,responsive.size(12),card_height-responsive.size(46));
+          lv_obj_set_size(card.slider,card_width-responsive.size(24),responsive.size(36));
           lv_slider_set_range(card.slider, 0, e.domain == "fan" ? 100 : 255);
           lv_obj_set_style_radius(card.slider, 12, LV_PART_MAIN);
           lv_obj_set_style_radius(card.slider, 12, LV_PART_INDICATOR);
