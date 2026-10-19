@@ -1608,7 +1608,7 @@ class RoomDevices {
             static_cast<int>(std::count_if(composite_block->items.begin(),composite_block->items.end(),
                 [&](const Entity *item){return item!=&e;})):0;
         // Two metrics per row; reserve space above the metrics for fan controls.
-        const int composite_rows=std::max(7,4+2*((composite_count+1)/2));
+        const int composite_rows=std::max(5,(responsive.size(145)+((composite_count+1)/2)*responsive.size(65)+responsive.size(12)+gap+responsive.size(47))/(responsive.size(40)+gap));
         const int requested_rows=composite_purifier?composite_rows:is_alarm?(e.alarm_modes.size()>3?6:5)
             :has_control?3:(e.domain=="sensor" || categories || tall_card(e))?3:2;
         const auto slot=tile_grid.place(requested_columns,requested_rows);
@@ -1864,7 +1864,9 @@ class RoomDevices {
             const uint32_t accent=temp?0xF4B35C:humid?0x55C9EE:particulate?0x8FCB93:0x91B5E8;
             const char *glyph=temp?"\xF3\xB0\x94\x8F":
                 humid?"\xF3\xB0\x96\x8E":
-                particulate?"\xF3\xB0\xB5\x83":"\xF3\xB0\x94\x8F";
+                particulate?"\xF3\xB0\xB5\x83":metric->domain=="switch" || metric->domain=="input_boolean"?LV_SYMBOL_POWER:
+                metric->domain=="light"?LV_SYMBOL_EYE_OPEN:metric->domain=="button"?LV_SYMBOL_OK:
+                metric->domain=="fan"?LV_SYMBOL_REFRESH:LV_SYMBOL_SETTINGS;
             auto *symbol=make_label(tile,0,responsive.size(12),responsive.size(25),glyph);
             lv_obj_set_style_text_font(symbol,hmh_mdi_font,0);
             lv_obj_set_style_text_color(symbol,lv_color_hex(accent),0);
