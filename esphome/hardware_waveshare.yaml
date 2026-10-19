@@ -1,4 +1,16 @@
 # HMH Hardware Waveshare ESP32-S3-Touch-LCD-7 V1
+# Esperimento isolato Gaia RGB: driver ESPHome 2026.9.1 con
+# bounce buffer DMA in SRAM da 16 righe (stock: 10).
+# Per tornare al driver standard, rimuovere questo blocco.
+external_components:
+  - source:
+      type: git
+      url: https://github.com/MarcoFre/HMH-Dashboard
+      ref: feature/gaia-06-responsive
+      path: esphome/rgb_test_components
+    components: [mipi_rgb]
+    refresh: 0s
+
 esp32:
   board: esp32-s3-devkitc-1
   variant: esp32s3
