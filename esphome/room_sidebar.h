@@ -1601,7 +1601,12 @@ class RoomDevices {
                 !b.items.empty() && b.items[0]==&e && e.domain=="fan" && e.purifier;});
         const bool composite_purifier=composite_block!=device_blocks_.end();
         const int requested_columns=(is_alarm || composite_purifier)?4:2;
-        const int requested_rows=composite_purifier?7:is_alarm?(e.alarm_modes.size()>3?6:5)
+        const int composite_count=composite_purifier?
+            static_cast<int>(std::count_if(composite_block->items.begin(),composite_block->items.end(),
+                [&](const Entity *item){return item!=&e && item->domain=="sensor";})):0;
+        // Two metrics per row; reserve space above the metrics for fan controls.
+        const int composite_rows=std::max(7,4+2*((composite_count+1)/2));
+        const int requested_rows=composite_purifier?composite_rows:is_alarm?(e.alarm_modes.size()>3?6:5)
             :has_control?3:(e.domain=="sensor" || categories || tall_card(e))?3:2;
         const auto slot=tile_grid.place(requested_columns,requested_rows);
         const int card_width=slot.w;
@@ -1835,7 +1840,7 @@ class RoomDevices {
           int index=0;
           for(const Entity *metric:composite_block->items) {
             if(metric==&e || metric->domain!="sensor") continue;
-            if(index>=4) break;
+
             const int mx=inset+(index%metric_cols)*(cell_w+cell_gap);
             const int my=metric_top+(index/metric_cols)*(cell_h+cell_gap);
             auto *tile=lv_obj_create(card.obj);
