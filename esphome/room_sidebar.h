@@ -1885,7 +1885,7 @@ class RoomDevices {
                 (metric->device_class=="atmospheric_pressure" || metric->device_class=="pressure")?LV_SYMBOL_REFRESH:
                 metric->device_class=="speed"?LV_SYMBOL_UP:LV_SYMBOL_SETTINGS;
             auto *symbol=make_label(tile,0,responsive.size(12),responsive.size(25),glyph);
-            lv_obj_set_style_text_font(symbol,hmh_runtime_text_20,0);
+            lv_obj_set_style_text_font(symbol,hmh_mdi_font,0);
             lv_obj_set_style_text_color(symbol,lv_color_hex(accent),0);
             auto *title=make_label(tile,responsive.size(28),responsive.size(2),(last_single?card_width-2*inset:cell_w)-responsive.size(42),
                 temp?"Temperatura":humid?"Umidita'":particulate?"PM2.5":metric->name.c_str());
