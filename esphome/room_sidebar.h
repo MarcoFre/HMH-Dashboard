@@ -269,6 +269,7 @@ class RoomDevices {
     uint32_t requested_at = 0;
     lv_obj_t *room_label = nullptr, *pm25_label = nullptr, *speed_bar = nullptr;
     std::vector<std::pair<std::string, lv_obj_t *>> composite_metrics;
+    std::vector<std::pair<std::string, lv_obj_t *>> composite_controls;
     lv_obj_t *gaia_scale = nullptr, *gaia_scale_caption = nullptr;
     lv_obj_t *obj = nullptr, *name = nullptr, *status = nullptr, *lamp = nullptr, *lamp_base = nullptr;
   };
@@ -1494,6 +1495,9 @@ class RoomDevices {
     for(auto &block:device_blocks_) {
       auto primary=std::find_if(block.items.begin(),block.items.end(),
           [](const Entity *e){return e->domain=="fan" && e->purifier;});
+      if(primary==block.items.end()) primary=std::find_if(block.items.begin(),block.items.end(),
+          [](const Entity *e){return e->domain=="light" || e->domain=="switch" ||
+              e->domain=="fan" || e->domain=="climate" || e->domain=="cover";});
       if(primary!=block.items.end() && block.grouped) {
         const Entity *fan=*primary;
         block.items.erase(primary);
@@ -1509,11 +1513,10 @@ class RoomDevices {
     selected.clear();std::string signature;
     for(const auto &block:device_blocks_) {
       signature+=block.key+"|"+block.items[0]->device_name+";";
-      const bool composite=block.grouped && !block.items.empty() &&
-          block.items[0]->domain=="fan" && block.items[0]->purifier;
+      const bool composite=block.grouped && !block.items.empty();
       for(const auto *e:block.items) {
         // Sensor children are drawn inside the parent's card.
-        if(!composite || e==block.items[0] || e->domain!="sensor") selected.push_back(e);
+        if(!composite || e==block.items[0]) selected.push_back(e);
         signature+=e->id+"|"+e->name+"|"+e->device_class+"|"+e->unit+";";signature+=e->has_battery?"B":"N";
         for(const auto &mode:e->alarm_modes) signature+=mode+",";
       }
@@ -1598,12 +1601,12 @@ class RoomDevices {
         const auto composite_key=device_key(e);
         const auto composite_block=std::find_if(device_blocks_.begin(),device_blocks_.end(),
             [&](const DeviceBlock &b){return b.grouped && b.key==composite_key &&
-                !b.items.empty() && b.items[0]==&e && e.domain=="fan" && e.purifier;});
+                !b.items.empty() && b.items[0]==&e;});
         const bool composite_purifier=composite_block!=device_blocks_.end();
         const int requested_columns=(is_alarm || composite_purifier)?4:2;
         const int composite_count=composite_purifier?
             static_cast<int>(std::count_if(composite_block->items.begin(),composite_block->items.end(),
-                [&](const Entity *item){return item!=&e && item->domain=="sensor";})):0;
+                [&](const Entity *item){return item!=&e;})):0;
         // Two metrics per row; reserve space above the metrics for fan controls.
         const int composite_rows=std::max(7,4+2*((composite_count+1)/2));
         const int requested_rows=composite_purifier?composite_rows:is_alarm?(e.alarm_modes.size()>3?6:5)
@@ -1839,7 +1842,7 @@ class RoomDevices {
           const int cell_h=responsive.size(57);
           int index=0;
           for(const Entity *metric:composite_block->items) {
-            if(metric==&e || metric->domain!="sensor") continue;
+            if(metric==&e) continue;
 
             const int mx=inset+(index%metric_cols)*(cell_w+cell_gap);
             const int my=metric_top+(index/metric_cols)*(cell_h+cell_gap);
@@ -1875,6 +1878,31 @@ class RoomDevices {
             lv_obj_set_style_text_color(value,lv_color_hex(0xF2F8FE),0);
             lv_label_set_long_mode(value,LV_LABEL_LONG_DOT);
             card.composite_metrics.push_back({metric->id,value});
+            if(metric->domain=="switch" || metric->domain=="light" ||
+               metric->domain=="input_boolean" || metric->domain=="button" ||
+               metric->domain=="fan" || metric->domain=="climate") {
+              card.composite_controls.push_back({metric->id,tile});
+              lv_obj_add_flag(tile,LV_OBJ_FLAG_CLICKABLE);
+              lv_obj_add_event_cb(tile,[](lv_event_t *event) {
+                auto *self=static_cast<RoomDevices *>(lv_event_get_user_data(event));
+                if(!self->online_ || hmh_navigation_blocked) return;
+                lv_obj_t *target=static_cast<lv_obj_t *>(lv_event_get_target(event));
+                for(const auto &card:self->cards_) for(const auto &control:card.composite_controls) {
+                  if(control.second!=target) continue;
+                  const Entity *child=self->find(control.first);
+                  if(!child || !self->available(*child)) return;
+                  if(child->domain=="climate") {self->open_climate(*child);return;}
+                  if(child->domain=="light" && (child->brightness_supported || child->color_supported)) {
+                    self->open_detail(*child);return;
+                  }
+                  if(!self->on_command) return;
+                  const std::string action=child->domain=="button"?"button.press":
+                      child->domain+(child->state=="on"?".turn_off":".turn_on");
+                  self->on_command(action,child->id);
+                  return;
+                }
+              },LV_EVENT_CLICKED,this);
+            }
             ++index;
           }
         }
@@ -1934,6 +1962,7 @@ class RoomDevices {
         const Entity *child=find(metric.first);
         if(!child) continue;
         std::string caption=status_text(*child);
+        if(child->domain=="switch" || child->domain=="light" || child->domain=="input_boolean") caption=child->state=="on"?"Acceso":"Spento";
         lv_label_set_text(metric.second,caption.c_str());
       }
       lv_obj_set_style_text_color(card.status, hmh_color(0xCBD5E1), 0);
