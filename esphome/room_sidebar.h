@@ -1606,12 +1606,16 @@ class RoomDevices {
         const bool sensor_only_composite=composite_purifier &&
             std::all_of(composite_block->items.begin(),composite_block->items.end(),
                 [](const Entity *item){return item->domain=="sensor" || item->domain=="binary_sensor";});
+        const bool switch_only_composite=composite_purifier &&
+            std::all_of(composite_block->items.begin(),composite_block->items.end(),
+                [](const Entity *item){return item->domain=="switch" || item->domain=="input_boolean";});
+        const bool uniform_composite=sensor_only_composite || switch_only_composite;
         const int requested_columns=(is_alarm || composite_purifier)?4:2;
         const int composite_count=composite_purifier?
-            static_cast<int>(composite_block->items.size())-(sensor_only_composite?0:1):0;
+            static_cast<int>(composite_block->items.size())-(uniform_composite?0:1):0;
         // Two metrics per row; reserve space above the metrics for fan controls.
         const int metric_rows=(composite_count+1)/2;
-        const int metrics_top=sensor_only_composite?responsive.size(16):responsive.size(145);
+        const int metrics_top=uniform_composite?responsive.size(16):responsive.size(145);
         const int metrics_bottom=metrics_top+metric_rows*responsive.size(57)+
             std::max(0,metric_rows-1)*responsive.size(8);
         const int content_bottom=metric_rows?metrics_bottom+responsive.size(12):metrics_top+responsive.size(12);
@@ -1840,7 +1844,7 @@ class RoomDevices {
           lv_obj_set_style_bg_opa(bar,LV_OPA_COVER,LV_PART_MAIN);
           lv_obj_set_style_bg_opa(bar,LV_OPA_COVER,LV_PART_INDICATOR);
         }
-        if(sensor_only_composite) {
+        if(uniform_composite) {
           lv_obj_add_flag(card.icon_tile,LV_OBJ_FLAG_HIDDEN);
           lv_obj_add_flag(card.name,LV_OBJ_FLAG_HIDDEN);
           lv_obj_add_flag(card.status,LV_OBJ_FLAG_HIDDEN);
@@ -1849,14 +1853,14 @@ class RoomDevices {
         if(composite_purifier) {
           // Dedicated metric region, above the bottom fan slider.
           const int inset=responsive.size(12);
-          const int metric_top=sensor_only_composite?responsive.size(16):responsive.size(145);
+          const int metric_top=uniform_composite?responsive.size(16):responsive.size(145);
           const int cell_gap=responsive.size(8);
           const int metric_cols=2;
           const int cell_w=(card_width-2*inset-cell_gap)/metric_cols;
           const int cell_h=responsive.size(57);
           int index=0;
           for(const Entity *metric:composite_block->items) {
-            if(metric==&e && !sensor_only_composite) continue;
+            if(metric==&e && !uniform_composite) continue;
 
             const bool last_single=(composite_count%2)==1 && index==composite_count-1;
             const int mx=inset+(index%metric_cols)*(cell_w+cell_gap);
@@ -1987,7 +1991,7 @@ class RoomDevices {
       }
       if(is_contact(e)) status.clear();
       lv_label_set_text(card.status, status.c_str());
-      if(!card.composite_metrics.empty() && (e.domain=="sensor" || e.domain=="binary_sensor")) {
+      if(!card.composite_metrics.empty() && (e.domain=="sensor" || e.domain=="binary_sensor" || e.domain=="switch" || e.domain=="input_boolean")) {
         lv_obj_add_flag(card.name,LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(card.status,LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(card.icon_tile,LV_OBJ_FLAG_HIDDEN);
