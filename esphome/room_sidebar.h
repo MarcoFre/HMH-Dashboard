@@ -1617,13 +1617,16 @@ class RoomDevices {
             static_cast<int>(composite_block->items.size())-(uniform_composite?0:1):0;
         // Two metrics per row; reserve space above the metrics for fan controls.
         const int metric_rows=(composite_count+1)/2;
-        const int metrics_top=uniform_composite?responsive.size(16):responsive.size(145);
+        const bool compact_switch_metrics=composite_purifier && !uniform_composite &&
+            (e.domain=="switch" || e.domain=="input_boolean") && !has_control;
+        const int metrics_top=uniform_composite?responsive.size(16):
+            compact_switch_metrics?responsive.size(82):responsive.size(145);
         const int metrics_bottom=metrics_top+metric_rows*responsive.size(57)+
             std::max(0,metric_rows-1)*responsive.size(8);
         const int content_bottom=metric_rows?metrics_bottom+responsive.size(12):metrics_top+responsive.size(12);
         const int tile_pitch=responsive.size(40)+gap;
         // Uniform grids contain only metric tiles: two rows need no hero-sized minimum.
-        const int composite_rows=std::max(uniform_composite?2:3,
+        const int composite_rows=std::max((uniform_composite || compact_switch_metrics)?2:3,
             (content_bottom+gap+tile_pitch-1)/tile_pitch);
         // Alarm actions start at y=78/88, with 42 px row pitch and 34 px buttons.
         // Include the final disarm row, then reserve a small bottom breathing space.
@@ -1863,7 +1866,7 @@ class RoomDevices {
         if(composite_purifier) {
           // Dedicated metric region, above the bottom fan slider.
           const int inset=responsive.size(12);
-          const int metric_top=uniform_composite?responsive.size(16):responsive.size(145);
+          const int metric_top=metrics_top;
           const int cell_gap=responsive.size(8);
           const int metric_cols=2;
           const int cell_w=(card_width-2*inset-cell_gap)/metric_cols;
