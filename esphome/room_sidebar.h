@@ -1601,7 +1601,7 @@ class RoomDevices {
                 !b.items.empty() && b.items[0]==&e && e.domain=="fan" && e.purifier;});
         const bool composite_purifier=composite_block!=device_blocks_.end();
         const int requested_columns=(is_alarm || composite_purifier)?4:2;
-        const int requested_rows=composite_purifier?5:is_alarm?(e.alarm_modes.size()>3?6:5)
+        const int requested_rows=composite_purifier?7:is_alarm?(e.alarm_modes.size()>3?6:5)
             :has_control?3:(e.domain=="sensor" || categories || tall_card(e))?3:2;
         const auto slot=tile_grid.place(requested_columns,requested_rows);
         const int card_width=slot.w;
@@ -1824,16 +1824,32 @@ class RoomDevices {
           lv_obj_set_style_bg_opa(bar,LV_OPA_COVER,LV_PART_INDICATOR);
         }
         if(composite_purifier) {
-          const int x0=responsive.size(12);
-          const int y0=responsive.size(72);
-          const int line=responsive.size(27);
+          // Dedicated metric region, above the bottom fan slider.
+          const int inset=responsive.size(12);
+          const int metric_top=responsive.size(88);
+          const int cell_gap=responsive.size(8);
+          const int metric_cols=2;
+          const int cell_w=(card_width-2*inset-cell_gap)/metric_cols;
+          const int cell_h=responsive.size(57);
           int index=0;
           for(const Entity *metric:composite_block->items) {
             if(metric==&e || metric->domain!="sensor") continue;
-            if(index>=3) break; // Pilot shows three primary metrics; other sensors remain in the catalog.
-            auto *label=make_label(card.obj,x0,y0+index*line,card_width-2*x0,"");
+            if(index>=4) break;
+            const int mx=inset+(index%metric_cols)*(cell_w+cell_gap);
+            const int my=metric_top+(index/metric_cols)*(cell_h+cell_gap);
+            auto *tile=lv_obj_create(card.obj);
+            lv_obj_set_pos(tile,mx,my);
+            lv_obj_set_size(tile,cell_w,cell_h);
+            lv_obj_set_style_pad_all(tile,responsive.size(6),0);
+            lv_obj_set_style_radius(tile,responsive.size(9),0);
+            lv_obj_set_style_border_width(tile,0,0);
+            lv_obj_set_style_bg_color(tile,lv_color_hex(0x19354D),0);
+            lv_obj_clear_flag(tile,LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_clear_flag(tile,LV_OBJ_FLAG_CLICKABLE);
+            auto *label=make_label(tile,0,0,cell_w-responsive.size(12),"");
             lv_obj_set_style_text_font(label,hmh_runtime_text_16,0);
             lv_obj_set_style_text_color(label,lv_color_hex(0xC8E5F4),0);
+            lv_label_set_long_mode(label,LV_LABEL_LONG_DOT);
             card.composite_metrics.push_back({metric->id,label});
             ++index;
           }
