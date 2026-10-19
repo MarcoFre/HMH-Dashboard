@@ -1881,15 +1881,23 @@ class RoomDevices {
                 metric->name.find("PM2")!=std::string::npos ||
                 metric->name.find("pm2")!=std::string::npos;
             const uint32_t accent=temp?0xF4B35C:humid?0x55C9EE:particulate?0x8FCB93:0x91B5E8;
-            const char *glyph=temp?"\xF3\xB0\x94\x8F":
+            const bool lux=metric->device_class=="illuminance";
+            const bool pressure=metric->device_class=="atmospheric_pressure" ||
+                metric->device_class=="pressure";
+            const bool wind=metric->device_class=="speed" ||
+                metric->name.find("vento")!=std::string::npos;
+            const bool mdi_metric=temp || humid || particulate || lux || pressure || wind;
+            const char *glyph=temp?"\xF3\xB0\x94\x90":
                 humid?"\xF3\xB0\x96\x8E":
-                particulate?"\xF3\xB0\xB5\x83":metric->domain=="switch" || metric->domain=="input_boolean"?LV_SYMBOL_POWER:
+                particulate?"\xF3\xB0\xB5\x83":
+                lux?"\xF3\xB0\x96\xA8":
+                pressure?"\xF3\xB0\x8A\x9A":
+                wind?"\xF3\xB0\x96\x9D":
+                metric->domain=="switch" || metric->domain=="input_boolean"?LV_SYMBOL_POWER:
                 metric->domain=="light"?LV_SYMBOL_EYE_OPEN:metric->domain=="button"?LV_SYMBOL_OK:
-                metric->domain=="fan"?LV_SYMBOL_REFRESH:
-                (metric->device_class=="atmospheric_pressure" || metric->device_class=="pressure")?LV_SYMBOL_REFRESH:
-                metric->device_class=="speed"?LV_SYMBOL_UP:LV_SYMBOL_SETTINGS;
+                metric->domain=="fan"?LV_SYMBOL_REFRESH:LV_SYMBOL_SETTINGS;
             auto *symbol=make_label(tile,0,responsive.size(12),responsive.size(25),glyph);
-            lv_obj_set_style_text_font(symbol,(temp || humid || particulate)?hmh_mdi_font:hmh_runtime_text_20,0);
+            lv_obj_set_style_text_font(symbol,mdi_metric?hmh_metric_icons_20:hmh_runtime_text_20,0);
             lv_obj_set_style_text_color(symbol,lv_color_hex(accent),0);
             std::string short_name=metric->name;
             if(!metric->device_name.empty() &&
