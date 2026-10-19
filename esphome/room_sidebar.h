@@ -2021,6 +2021,26 @@ class RoomDevices {
         if(child->domain=="switch" || child->domain=="light" || child->domain=="input_boolean") caption=child->state=="on"?"Acceso":"Spento";
         lv_label_set_text(metric.second,caption.c_str());
       }
+      // Gaia 0.8.15: colour switch tiles according to live HA state.
+      // The tile owns icon, title and value, in that order. Style only switch
+      // and input_boolean children; keep sensors and other controls unchanged.
+      for(const auto &control:card.composite_controls) {
+        const Entity *child=find(control.first);
+        if(!child || (child->domain!="switch" && child->domain!="input_boolean")) continue;
+        lv_obj_t *tile=control.second;
+        const bool active=child->state=="on";
+        const bool known=available(*child);
+        const uint32_t icon_color=!known?0x8195A5:active?0xF4C46D:0x8195A5;
+        const uint32_t tile_color=!known?0x1A2937:active?0x20433F:0x19354D;
+        lv_obj_set_style_bg_color(tile,lv_color_hex(tile_color),0);
+        lv_obj_set_style_border_width(tile,active && known?1:0,0);
+        lv_obj_set_style_border_color(tile,lv_color_hex(0x477D66),0);
+        if(lv_obj_get_child_cnt(tile)>=3) {
+          lv_obj_set_style_text_color(lv_obj_get_child(tile,0),lv_color_hex(icon_color),0);
+          lv_obj_set_style_text_color(lv_obj_get_child(tile,2),
+              lv_color_hex(!known?0x8195A5:active?0xF5F9FC:0xB6C6D3),0);
+        }
+      }
       lv_obj_set_style_text_color(card.status, hmh_color(0xCBD5E1), 0);
       if (e.domain == "cover") {
         lv_label_set_text(card.icon, cover_icon(e));
