@@ -1810,6 +1810,7 @@ class RoomDevices {
         if(e.purifier) {
           card.pm25_label=make_label(card.obj,12,categories?80:68,card_width-24,"");
           lv_obj_set_height(card.pm25_label,20);
+          if(composite_purifier) lv_obj_add_flag(card.pm25_label,LV_OBJ_FLAG_HIDDEN);
           if(card.slider) {lv_obj_set_y(card.slider,composite_purifier?responsive.size(100):(categories?103:90));lv_obj_set_height(card.slider,composite_purifier?responsive.size(30):(categories?18:30));}
           else {
             card.speed_bar=lv_bar_create(card.obj);lv_obj_set_pos(card.speed_bar,12,composite_purifier?responsive.size(100):(categories?103:90));
@@ -1846,11 +1847,29 @@ class RoomDevices {
             lv_obj_set_style_bg_color(tile,lv_color_hex(0x19354D),0);
             lv_obj_clear_flag(tile,LV_OBJ_FLAG_SCROLLABLE);
             lv_obj_clear_flag(tile,LV_OBJ_FLAG_CLICKABLE);
-            auto *label=make_label(tile,0,0,cell_w-responsive.size(12),"");
-            lv_obj_set_style_text_font(label,hmh_runtime_text_16,0);
-            lv_obj_set_style_text_color(label,lv_color_hex(0xC8E5F4),0);
-            lv_label_set_long_mode(label,LV_LABEL_LONG_DOT);
-            card.composite_metrics.push_back({metric->id,label});
+            // Distinct semantic icon and two-line typography.
+            const bool temp=metric->device_class=="temperature";
+            const bool humid=metric->device_class=="humidity";
+            const bool particulate=metric->device_class=="pm25" ||
+                metric->name.find("PM2")!=std::string::npos ||
+                metric->name.find("pm2")!=std::string::npos;
+            const uint32_t accent=temp?0xF4B35C:humid?0x55C9EE:particulate?0x8FCB93:0x91B5E8;
+            const char *glyph=temp?"\xF3\xB0\x94\x8F":
+                humid?"\xF3\xB0\x96\x8E":
+                particulate?"\xF3\xB0\xB5\x83":"\xF3\xB0\x94\x8F";
+            auto *symbol=make_label(tile,0,responsive.size(12),responsive.size(25),glyph);
+            lv_obj_set_style_text_font(symbol,hmh_mdi_font,0);
+            lv_obj_set_style_text_color(symbol,lv_color_hex(accent),0);
+            auto *title=make_label(tile,responsive.size(28),responsive.size(2),cell_w-responsive.size(42),
+                temp?"Temperatura":humid?"Umidita'":particulate?"PM2.5":metric->name.c_str());
+            lv_obj_set_style_text_font(title,hmh_chip_text_14,0);
+            lv_obj_set_style_text_color(title,lv_color_hex(0x94B7CE),0);
+            lv_label_set_long_mode(title,LV_LABEL_LONG_DOT);
+            auto *value=make_label(tile,responsive.size(28),responsive.size(25),cell_w-responsive.size(42),"--");
+            lv_obj_set_style_text_font(value,hmh_runtime_text_20,0);
+            lv_obj_set_style_text_color(value,lv_color_hex(0xF2F8FE),0);
+            lv_label_set_long_mode(value,LV_LABEL_LONG_DOT);
+            card.composite_metrics.push_back({metric->id,value});
             ++index;
           }
         }
@@ -1909,7 +1928,7 @@ class RoomDevices {
       for(const auto &metric:card.composite_metrics) {
         const Entity *child=find(metric.first);
         if(!child) continue;
-        std::string caption=child->name+": "+status_text(*child);
+        std::string caption=status_text(*child);
         lv_label_set_text(metric.second,caption.c_str());
       }
       lv_obj_set_style_text_color(card.status, hmh_color(0xCBD5E1), 0);
