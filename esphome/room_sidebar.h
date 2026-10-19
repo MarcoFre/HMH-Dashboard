@@ -263,6 +263,7 @@ class RoomDevices {
     HmhBatteryWidget battery;
     std::vector<std::pair<lv_obj_t *,std::string>> alarm_buttons;
     std::string entity_id;
+    bool uniform_composite = false;
     int width = 0;
     lv_obj_t *minus = nullptr, *plus = nullptr, *mode = nullptr, *target = nullptr;
     float requested = NAN;
@@ -1636,6 +1637,7 @@ class RoomDevices {
         const int card_height=slot.h;
         Card card;
         card.entity_id = e.id;
+        card.uniform_composite = uniform_composite;
         card.width = card_width;
         card.obj = lv_btn_create(list_);
         lv_obj_set_pos(card.obj,slot.x,slot.y);
@@ -1996,7 +1998,7 @@ class RoomDevices {
       else lv_obj_add_state(card.obj, LV_STATE_DISABLED);
       if (read_only && e.domain!="sensor") lv_obj_clear_flag(card.obj, LV_OBJ_FLAG_CLICKABLE);
       else lv_obj_add_flag(card.obj, LV_OBJ_FLAG_CLICKABLE);
-      if(!card.composite_controls.empty() && (e.domain=="switch" || e.domain=="input_boolean"))
+      if(card.uniform_composite && !card.composite_controls.empty() && (e.domain=="switch" || e.domain=="input_boolean"))
         lv_obj_clear_flag(card.obj,LV_OBJ_FLAG_CLICKABLE);
       std::string status = status_text(e);
       if (available(e)) {
@@ -2009,7 +2011,7 @@ class RoomDevices {
       }
       if(is_contact(e)) status.clear();
       lv_label_set_text(card.status, status.c_str());
-      if(!card.composite_metrics.empty() && (e.domain=="sensor" || e.domain=="binary_sensor" || e.domain=="switch" || e.domain=="input_boolean")) {
+      if(card.uniform_composite && !card.composite_metrics.empty()) {
         lv_obj_add_flag(card.name,LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(card.status,LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(card.icon_tile,LV_OBJ_FLAG_HIDDEN);
