@@ -381,7 +381,6 @@ class DashboardCatalog(SensorEntity):
                 "color_supported": domain == "light" and bool(modes & COLOR_MODES),
             })
         # Purifiers are fans with a PM2.5 sensor on the same registered device.
-        consumed_pm = set()
         for item in entity_items:
             if not item["id"].startswith("fan.") or item.get("chip"): continue
             entry = entities.entities.get(item["id"])
@@ -404,10 +403,10 @@ class DashboardCatalog(SensorEntity):
                 eid, pm_state, pm_attrs = candidates[0]
                 item["pm25_state"] = pm_state.state if pm_state else "unavailable"
                 item["pm25_unit"] = pm_attrs.get("unit_of_measurement") or "µg/m³"
-                selected.add(eid)
-                # Preserve independently selected chips; otherwise avoid a duplicate sensor card.
-                if not any(e["id"] == eid and e.get("chip") for e in entity_items): consumed_pm.add(eid)
-        entity_items = [item for item in entity_items if item["id"] not in consumed_pm]
+                # PM2.5 remains a normal catalog entity ONLY if it has the
+                # HMH Dashboard label. The composite renderer owns deduplication.
+                # Do not add unlabelled candidates to selected/catalog.
+
         # Pair only unambiguous, dashboard-labelled entities from the same HA device and area.
         grouped = {}
         for item in entity_items:
