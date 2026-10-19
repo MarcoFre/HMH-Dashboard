@@ -412,15 +412,15 @@ class DashboardCatalog(SensorEntity):
         for item in entity_items:
             if item.get("_device"):
                 grouped.setdefault((item["_device"], item["area"]), []).append(item)
-        paired = set()
         for group in grouped.values():
             switches = [item for item in group if item["id"].startswith("switch.")]
             powers = [item for item in group if item["id"].startswith("sensor.") and item["device_class"] == "power" and not item.get("chip")]
             if len(switches) == 1 and len(powers) == 1:
                 switch, power = switches[0], powers[0]
                 switch.update(power_state=power["state"], power_unit=power["unit"], power_entity=power["id"])
-                paired.add(power["id"])
-        entity_items = [item for item in entity_items if item["id"] not in paired]
+                # Keep the labelled power sensor in the catalog as its own entity.
+                # The switch may show its reading too, but grouping/rendering
+                # must not silently discard a user-selected HA entity.
         # A registered device is one group, even across entity domains/categories.
         device_groups = {}
         for item in entity_items:
