@@ -1603,15 +1603,18 @@ class RoomDevices {
             [&](const DeviceBlock &b){return b.grouped && b.key==composite_key &&
                 !b.items.empty() && b.items[0]==&e;});
         const bool composite_purifier=composite_block!=device_blocks_.end();
+        const bool sensor_only_composite=composite_purifier &&
+            std::all_of(composite_block->items.begin(),composite_block->items.end(),
+                [](const Entity *item){return item->domain=="sensor" || item->domain=="binary_sensor";});
         const int requested_columns=(is_alarm || composite_purifier)?4:2;
         const int composite_count=composite_purifier?
-            static_cast<int>(std::count_if(composite_block->items.begin(),composite_block->items.end(),
-                [&](const Entity *item){return item!=&e;})):0;
+            static_cast<int>(composite_block->items.size())-(sensor_only_composite?0:1):0;
         // Two metrics per row; reserve space above the metrics for fan controls.
         const int metric_rows=(composite_count+1)/2;
-        const int metrics_bottom=responsive.size(145)+metric_rows*responsive.size(57)+
+        const int metrics_top=sensor_only_composite?responsive.size(16):responsive.size(145);
+        const int metrics_bottom=metrics_top+metric_rows*responsive.size(57)+
             std::max(0,metric_rows-1)*responsive.size(8);
-        const int content_bottom=metric_rows?metrics_bottom+responsive.size(12):responsive.size(145);
+        const int content_bottom=metric_rows?metrics_bottom+responsive.size(12):metrics_top+responsive.size(12);
         const int tile_pitch=responsive.size(40)+gap;
         const int composite_rows=std::max(3,(content_bottom+gap+tile_pitch-1)/tile_pitch);
         const int requested_rows=composite_purifier?composite_rows:is_alarm?(e.alarm_modes.size()>3?6:5)
@@ -1837,23 +1840,30 @@ class RoomDevices {
           lv_obj_set_style_bg_opa(bar,LV_OPA_COVER,LV_PART_MAIN);
           lv_obj_set_style_bg_opa(bar,LV_OPA_COVER,LV_PART_INDICATOR);
         }
+        if(sensor_only_composite) {
+          lv_obj_add_flag(card.icon_tile,LV_OBJ_FLAG_HIDDEN);
+          lv_obj_add_flag(card.name,LV_OBJ_FLAG_HIDDEN);
+          lv_obj_add_flag(card.status,LV_OBJ_FLAG_HIDDEN);
+          lv_obj_clear_flag(card.obj,LV_OBJ_FLAG_CLICKABLE);
+        }
         if(composite_purifier) {
           // Dedicated metric region, above the bottom fan slider.
           const int inset=responsive.size(12);
-          const int metric_top=responsive.size(145);
+          const int metric_top=sensor_only_composite?responsive.size(16):responsive.size(145);
           const int cell_gap=responsive.size(8);
           const int metric_cols=2;
           const int cell_w=(card_width-2*inset-cell_gap)/metric_cols;
           const int cell_h=responsive.size(57);
           int index=0;
           for(const Entity *metric:composite_block->items) {
-            if(metric==&e) continue;
+            if(metric==&e && !sensor_only_composite) continue;
 
+            const bool last_single=(composite_count%2)==1 && index==composite_count-1;
             const int mx=inset+(index%metric_cols)*(cell_w+cell_gap);
             const int my=metric_top+(index/metric_cols)*(cell_h+cell_gap);
             auto *tile=lv_obj_create(card.obj);
             lv_obj_set_pos(tile,mx,my);
-            lv_obj_set_size(tile,cell_w,cell_h);
+            lv_obj_set_size(tile,last_single?card_width-2*inset:cell_w,cell_h);
             lv_obj_set_style_pad_all(tile,responsive.size(6),0);
             lv_obj_set_style_radius(tile,responsive.size(9),0);
             lv_obj_set_style_border_width(tile,0,0);
@@ -1871,16 +1881,19 @@ class RoomDevices {
                 humid?"\xF3\xB0\x96\x8E":
                 particulate?"\xF3\xB0\xB5\x83":metric->domain=="switch" || metric->domain=="input_boolean"?LV_SYMBOL_POWER:
                 metric->domain=="light"?LV_SYMBOL_EYE_OPEN:metric->domain=="button"?LV_SYMBOL_OK:
-                metric->domain=="fan"?LV_SYMBOL_REFRESH:LV_SYMBOL_SETTINGS;
+                metric->domain=="fan"?LV_SYMBOL_REFRESH:
+                (metric->device_class=="atmospheric_pressure" || metric->device_class=="pressure")?LV_SYMBOL_REFRESH:
+                metric->device_class=="speed"?LV_SYMBOL_UP:LV_SYMBOL_SETTINGS;
             auto *symbol=make_label(tile,0,responsive.size(12),responsive.size(25),glyph);
-            lv_obj_set_style_text_font(symbol,hmh_mdi_font,0);
+            lv_obj_set_style_text_font(symbol,hmh_runtime_text_20,0);
             lv_obj_set_style_text_color(symbol,lv_color_hex(accent),0);
-            auto *title=make_label(tile,responsive.size(28),responsive.size(2),cell_w-responsive.size(42),
+            auto *title=make_label(tile,responsive.size(28),responsive.size(2),(last_single?card_width-2*inset:cell_w)-responsive.size(42),
                 temp?"Temperatura":humid?"Umidita'":particulate?"PM2.5":metric->name.c_str());
             lv_obj_set_style_text_font(title,hmh_chip_text_14,0);
             lv_obj_set_style_text_color(title,lv_color_hex(0x94B7CE),0);
             lv_label_set_long_mode(title,LV_LABEL_LONG_DOT);
-            auto *value=make_label(tile,responsive.size(28),responsive.size(25),cell_w-responsive.size(42),"--");
+            lv_obj_set_height(title,responsive.size(20));
+            auto *value=make_label(tile,responsive.size(28),responsive.size(25),(last_single?card_width-2*inset:cell_w)-responsive.size(42),"--");
             lv_obj_set_style_text_font(value,hmh_runtime_text_20,0);
             lv_obj_set_style_text_color(value,lv_color_hex(0xF2F8FE),0);
             lv_label_set_long_mode(value,LV_LABEL_LONG_DOT);
@@ -1965,6 +1978,11 @@ class RoomDevices {
       }
       if(is_contact(e)) status.clear();
       lv_label_set_text(card.status, status.c_str());
+      if(!card.composite_metrics.empty() && (e.domain=="sensor" || e.domain=="binary_sensor")) {
+        lv_obj_add_flag(card.name,LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(card.status,LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(card.icon_tile,LV_OBJ_FLAG_HIDDEN);
+      }
       for(const auto &metric:card.composite_metrics) {
         const Entity *child=find(metric.first);
         if(!child) continue;
