@@ -130,6 +130,15 @@ template<class T> class HmhRAMAllocator : public esphome::RAMAllocator<T> {
   template<class U> bool operator!=(const HmhRAMAllocator<U> &) const noexcept { return false; }
 };
 
+// Avoid invalidating/redrawing LVGL labels when the rendered text is unchanged.
+static void hmh_label_set_if_changed(lv_obj_t *label, const char *text) {
+  if (!label) return;
+  if (!text) text = "";
+  const char *current = lv_label_get_text(label);
+  if (current && std::strcmp(current, text) == 0) return;
+  lv_label_set_text(label, text);
+}
+
 static uint64_t hmh_catalog_signature(const std::string &value) {
   uint64_t hash = 14695981039346656037ULL;
   for (unsigned char c : value) { hash ^= c; hash *= 1099511628211ULL; }
@@ -382,6 +391,7 @@ class RoomDevices {
   }
   void load(const std::string &payload) {
     if (!list_ || dragging_) return;
+    const uint32_t perf_start = millis();
     const uint64_t signature = hmh_catalog_signature(payload);
     if (has_payload_ && payload.size() == payload_size_ && signature == payload_signature_) return;
     std::vector<Entity, HmhRAMAllocator<Entity>> incoming;
@@ -459,10 +469,13 @@ class RoomDevices {
       if (visible_) lv_label_set_text(hint_, "Catalogo entita' non valido: controlla il package HA.");
       return;
     }
+    const uint32_t perf_parsed = millis();
     entities_ = std::move(incoming);
     payload_signature_ = signature; payload_size_ = payload.size(); has_payload_ = true;
     received_ = true;
     refresh(false);
+    const uint32_t perf_total = millis() - perf_start;
+    if (perf_total >= 25) ESP_LOGW("hmh_perf", "Catalogo: parsing=%u ms, vista=%u ms, totale=%u ms, entita=%u",\n      static_cast<unsigned>(perf_parsed-perf_start),\n      static_cast<unsigned>(millis()-perf_parsed), static_cast<unsigned>(perf_total),\n      static_cast<unsigned>(entities_.size()));
   }
 
  private:
@@ -1978,7 +1991,7 @@ class RoomDevices {
     else if (all_selected.empty()) hint = "Nessuna entità con etichetta HMH Dashboard in questa vista.";
     else hint = std::to_string(all_selected.size()) + (all_selected.size() == 1 ? " dispositivo" : " dispositivi");
     if (!online_) hint += " | API offline";
-    lv_label_set_text(hint_, hint.c_str());
+    hmh_label_set_if_changed(hint_, hint.c_str());
     // The count overlaps the category heading when the list starts high.
     // Keep it accessible for empty/offline states; normal views use heading counts.
     if (received_ && !all_selected.empty() && online_)
@@ -1989,10 +2002,10 @@ class RoomDevices {
       auto &card = cards_[i];
       const auto &e = *selected[i];
       // Aggiorna i widget esistenti senza perdere lo scorrimento.
-      lv_label_set_text(card.name, e.name.c_str());
+      hmh_label_set_if_changed(card.name, e.name.c_str());
       if (card.room_label) {
         std::string name = area_name ? area_name(e.area) : e.area;
-        lv_label_set_text(card.room_label, name.c_str());
+        hmh_label_set_if_changed(card.room_label, name.c_str());
       }
       bool active = (e.domain == "cover" && available(e) && e.state != "closed") || e.state == "on" || (e.domain == "climate" && e.state != "off" && available(e));
       bool can_command = online_ && available(e) && e.domain != "binary_sensor" && e.domain != "sensor";
@@ -2013,7 +2026,7 @@ class RoomDevices {
         }
       }
       if(is_contact(e)) status.clear();
-      lv_label_set_text(card.status, status.c_str());
+      hmh_label_set_if_changed(card.status, status.c_str());
       if(card.uniform_composite && !card.composite_metrics.empty()) {
         lv_obj_add_flag(card.name,LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(card.status,LV_OBJ_FLAG_HIDDEN);
@@ -2024,7 +2037,7 @@ class RoomDevices {
         if(!child) continue;
         std::string caption=status_text(*child);
         if(child->domain=="switch" || child->domain=="light" || child->domain=="input_boolean") caption=child->state=="on"?"Acceso":"Spento";
-        lv_label_set_text(metric.second,caption.c_str());
+        hmh_label_set_if_changed(metric.second,caption.c_str());
       }
       // Gaia 0.8.15: colour switch tiles according to live HA state.
       // The tile owns icon, title and value, in that order. Style only switch
@@ -2048,7 +2061,7 @@ class RoomDevices {
       }
       lv_obj_set_style_text_color(card.status, hmh_color(0xCBD5E1), 0);
       if (e.domain == "cover") {
-        lv_label_set_text(card.icon, cover_icon(e));
+        hmh_label_set_if_changed(card.icon, cover_icon(e));
         lv_obj_clear_flag(card.obj, LV_OBJ_FLAG_CLICKABLE);
         const bool enabled[] = {can_command && e.cover_close && e.state != "closed", can_command && e.cover_stop, can_command && e.cover_open && (e.state != "open" || (e.position >= 0 && e.position < 100))};
         lv_obj_t *buttons[] = {card.minus, card.mode, card.plus};
@@ -2059,7 +2072,7 @@ class RoomDevices {
         }
       }
       if (e.domain == "climate") {
-        if (card.icon) lv_label_set_text(card.icon, (e.hvac_action == "cooling" || e.state == "cool") ? "\xF3\xB0\x9C\x97" :
+        if (card.icon) hmh_label_set_if_changed(card.icon, (e.hvac_action == "cooling" || e.state == "cool") ? "\xF3\xB0\x9C\x97" :
             (e.hvac_action == "heating" || e.state == "heat") ? "\xF3\xB0\x88\xB8" : "\xF3\xB0\x8E\x93");
         if (std::isfinite(card.requested) && (std::fabs(e.temperature - card.requested) < 0.01f ||
             lv_tick_get() - card.requested_at > 5000)) card.requested = NAN;
@@ -2068,7 +2081,7 @@ class RoomDevices {
         std::string target = single ? temperature_text(std::isfinite(card.requested) ? card.requested : e.temperature, "") :
             e.range_supported && std::isfinite(e.low) && std::isfinite(e.high) ? "Intervallo" : "--";
         if (std::isfinite(card.requested)) target += "...";
-        lv_label_set_text(card.target, target.c_str());
+        hmh_label_set_if_changed(card.target, target.c_str());
         for (auto *button : {card.minus, card.plus}) {
           if (can_command && single) lv_obj_clear_state(button, LV_STATE_DISABLED);
           else lv_obj_add_state(button, LV_STATE_DISABLED);
@@ -2082,10 +2095,10 @@ class RoomDevices {
         lv_obj_set_style_text_color(card.status, hmh_color(0xEAF2FF), 0);
       }
       if (e.domain == "sensor" && card.icon) {
-        lv_label_set_text(card.icon, sensor_icon(e));
+        hmh_label_set_if_changed(card.icon, sensor_icon(e));
       }
       if (e.domain == "binary_sensor" && card.icon)
-        lv_label_set_text(card.icon, binary_icon(e));
+        hmh_label_set_if_changed(card.icon, binary_icon(e));
       const lv_color_t icon_color = available(e) && active ?
           hmh_color(0xFBBF24) : hmh_color(0x64748B);
       if (card.icon) lv_obj_set_style_text_color(card.icon,
@@ -2121,7 +2134,7 @@ class RoomDevices {
         bool valid=end && end!=e.pm25_state.c_str() && *end=='\0' && std::isfinite(value) && value>=0;
         char formatted[32];std::snprintf(formatted,sizeof(formatted),"%.1f",value);
         std::string text=valid?std::string("PM2.5: ")+formatted+" "+e.pm25_unit:"PM2.5: non disponibile";
-        lv_label_set_text(card.pm25_label,text.c_str());
+        hmh_label_set_if_changed(card.pm25_label,text.c_str());
         lv_obj_set_style_text_color(card.pm25_label,hmh_color(0xCBD5E1),0);
         if(card.speed_bar) lv_bar_set_value(card.speed_bar,active?std::max(e.percentage,0):0,LV_ANIM_OFF);
         if(card.icon) lv_obj_set_style_text_color(card.icon,active?lv_color_hex(0xC084FC):hmh_color(0x64748B),0);
@@ -2153,7 +2166,7 @@ class RoomDevices {
           lv_obj_clear_flag(card.gaia_scale,LV_OBJ_FLAG_HIDDEN);
         } else lv_obj_add_flag(card.gaia_scale,LV_OBJ_FLAG_HIDDEN);
         if(card.gaia_scale_caption) {
-          lv_label_set_text(card.gaia_scale_caption, numeric?(pressure_hpa<1000?"Bassa pressione":pressure_hpa>1020?"Alta pressione":"Pressione intermedia"):"Pressione non disponibile");
+          hmh_label_set_if_changed(card.gaia_scale_caption, numeric?(pressure_hpa<1000?"Bassa pressione":pressure_hpa>1020?"Alta pressione":"Pressione intermedia"):"Pressione non disponibile");
         }
       }
       // Binary sensor resta una scheda di sola lettura ma a luminosita' piena.
