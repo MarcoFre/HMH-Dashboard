@@ -244,7 +244,16 @@ class DashboardCatalog(SensorEntity):
     @callback
     def _refresh(self):
         self._cancel_pending()
+        previous_value = self._attr_native_value
+        previous_catalog = self._attr_extra_state_attributes.get("catalogo")
+        previous_entities = self._attr_extra_state_attributes.get("entita")
         self._build()
+        # State events may change unrelated attributes without changing the
+        # dashboard payload. Do not retransmit 94 entities in that case.
+        if (previous_value == self._attr_native_value
+                and previous_catalog == self._attr_extra_state_attributes.get("catalogo")
+                and previous_entities == self._attr_extra_state_attributes.get("entita")):
+            return
         self.async_write_ha_state()
 
     @callback
