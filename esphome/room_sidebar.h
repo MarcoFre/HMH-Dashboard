@@ -1246,14 +1246,6 @@ class RoomDevices {
       char text[48];std::snprintf(text,sizeof(text),"%.2f",static_cast<double>(value));
       return std::string(text)+(e.unit.empty()?"":" "+e.unit);
     }
-    if (e.domain == "switch" && e.has_power) {
-      char *end = nullptr;
-      double value = std::strtod(e.power_state.c_str(), &end);
-      if (!end || end == e.power_state.c_str() || *end != '\0' || !std::isfinite(value)) return "Potenza non disponibile";
-      char text[64];
-      int size = std::snprintf(text, sizeof(text), "%.2f", value);
-      return (size >= 0 && static_cast<size_t>(size) < sizeof(text) ? std::string(text) : e.power_state) + (e.power_unit.empty() ? "" : " " + e.power_unit);
-    }
     if (e.domain == "fan") {
       if (!available(e)) return "Non disponibile";
       std::string text = e.state == "on" ? "Acceso" : "Spento";
@@ -1677,10 +1669,10 @@ class RoomDevices {
         const int requested_columns=(is_alarm || composite_purifier)?4:2;
         // Layout is driven by the content kind, not a fixed composite height.
         // Numerical values need a taller cell than status-only switches.
-        const bool energy_composite=composite_purifier && !uniform_composite &&
-            e.domain=="switch" && e.has_power && composite_block->items.size()>=3;
+        // Metric tiles are sourced exclusively from labelled catalog entities.
+        const bool energy_composite=false;
         const int composite_count=composite_purifier?
-            static_cast<int>(composite_block->items.size())-(uniform_composite?0:1)+(energy_composite?1:0):0;
+            static_cast<int>(composite_block->items.size())-(uniform_composite?0:1):0;
         const bool all_switches=uniform_composite && switch_only_composite;
         const int metric_cols=(composite_count==3 && (all_switches || energy_composite))?3:2;
         const int metric_rows=(composite_count+metric_cols-1)/metric_cols;
@@ -1954,7 +1946,6 @@ class RoomDevices {
           const int cell_h=metric_height;
           int index=0;
           std::vector<const Entity *> metric_items;
-          if(energy_composite) metric_items.push_back(&e);
           for(const Entity *metric:composite_block->items) {
             if(metric==&e && !uniform_composite) continue;
             metric_items.push_back(metric);
@@ -2102,9 +2093,8 @@ class RoomDevices {
         if (e.domain == "light") {
           status = e.brightness_supported ?
               std::to_string(active ? (e.brightness * 100 + 127) / 255 : 0) + "%" : "";
-        } else if(card.energy_composite) {
-          status=e.state=="on"?"Acceso":e.state=="off"?"Spento":"Non disponibile";
-        } else if ((e.domain == "switch" && !e.has_power) || e.domain == "input_boolean") {
+        } else if (e.domain == "switch" || e.domain == "input_boolean") {
+          // Do not expose a power sensor's value through another entity's card.
           status.clear();
         }
       }
