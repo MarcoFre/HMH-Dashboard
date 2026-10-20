@@ -139,6 +139,29 @@ static void hmh_label_set_if_changed(lv_obj_t *label, const char *text) {
   lv_label_set_text(label, text);
 }
 
+// Fast path: accept ONLY changes in the JSON "state" values, with every
+// other byte identical. Any structural/attribute change falls back to parsing.
+static bool hmh_state_only_delta(const std::string &before, const std::string &after,
+                                 std::vector<std::string> &states) {
+  static const std::string key = "\"state\":\"";
+  size_t a = 0, b = 0;
+  while (true) {
+    const size_t ka = before.find(key, a), kb = after.find(key, b);
+    if ((ka == std::string::npos) != (kb == std::string::npos)) return false;
+    const size_t ea = ka == std::string::npos ? before.size() : ka;
+    const size_t eb = kb == std::string::npos ? after.size() : kb;
+    if (ea-a != eb-b || before.compare(a,ea-a,after,b,eb-b) != 0) return false;
+    if (ka == std::string::npos) return !states.empty();
+    a = ka + key.size(); b = kb + key.size();
+    // Any escaped JSON value is handled by the full parser instead.
+    const size_t end_a = before.find('"', a), end_b = after.find('"', b);
+    if (end_a == std::string::npos || end_b == std::string::npos) return false;
+    if (before.find('\\',a) < end_a || after.find('\\',b) < end_b) return false;
+    states.emplace_back(after.substr(b,end_b-b));
+    a = end_a; b = end_b;
+  }
+}
+
 static uint64_t hmh_catalog_signature(const std::string &value) {
   uint64_t hash = 14695981039346656037ULL;
   for (unsigned char c : value) { hash ^= c; hash *= 1099511628211ULL; }
@@ -394,6 +417,24 @@ class RoomDevices {
     const uint32_t perf_start = millis();
     const uint64_t signature = hmh_catalog_signature(payload);
     if (has_payload_ && payload.size() == payload_size_ && signature == payload_signature_) return;
+    if (has_payload_ && !previous_payload_.empty() && entities_.size() > 0) {
+      std::vector<std::string> states;
+      if (hmh_state_only_delta(previous_payload_, payload, states) && states.size() == entities_.size()) {
+        bool relevant = false;
+        for (size_t i = 0; i < states.size(); ++i) {
+          if (entities_[i].state == states[i]) continue;
+          if (matches_view(entities_[i])) relevant = true;
+          entities_[i].state = std::move(states[i]);
+        }
+        previous_payload_ = payload;
+        payload_size_ = payload.size();
+        payload_signature_ = signature;
+        if (relevant) refresh(false);
+        const uint32_t elapsed = millis() - perf_start;
+        if (elapsed >= 25) ESP_LOGW("hmh_perf", "Delta stati: %u ms", static_cast<unsigned>(elapsed));
+        return;
+      }
+    }
     std::vector<Entity, HmhRAMAllocator<Entity>> incoming;
     bool valid = esphome::json::parse_json(hmh_json(payload), [&](JsonObject root) -> bool {
       if (!root["entities"].is<JsonArray>()) return false;
@@ -471,6 +512,7 @@ class RoomDevices {
     }
     const uint32_t perf_parsed = millis();
     entities_ = std::move(incoming);
+    previous_payload_ = payload;
     payload_signature_ = signature; payload_size_ = payload.size(); has_payload_ = true;
     received_ = true;
     refresh(false);
@@ -2201,6 +2243,7 @@ class RoomDevices {
   std::vector<Entity, HmhRAMAllocator<Entity>> entities_;
   std::vector<Card> cards_;
   std::string area_;
+  std::string previous_payload_;
   uint64_t payload_signature_ = 0;
   size_t payload_size_ = 0;
   bool has_payload_ = false;
