@@ -304,6 +304,7 @@ class RoomDevices {
     lv_obj_t *room_label = nullptr, *pm25_label = nullptr, *speed_bar = nullptr;
     std::vector<std::pair<std::string, lv_obj_t *>> composite_metrics;
     std::vector<std::pair<std::string, lv_obj_t *>> composite_controls;
+    std::vector<std::pair<std::string, lv_obj_t *>> composite_targets;
     lv_obj_t *gaia_scale = nullptr, *gaia_scale_caption = nullptr;
     lv_obj_t *obj = nullptr, *name = nullptr, *status = nullptr, *lamp = nullptr, *lamp_base = nullptr;
   };
@@ -2015,31 +2016,38 @@ class RoomDevices {
             lv_obj_set_style_text_color(value,lv_color_hex(0xF2F8FE),0);
             lv_label_set_long_mode(value,LV_LABEL_LONG_DOT);
             card.composite_metrics.push_back({metric->id,value});
-            if(!power_tile && (metric->domain=="switch" || metric->domain=="light" ||
+            // Each visible sub-tile owns its touch target: numerical readings
+            // open their history; commands retain their existing behavior.
+            card.composite_targets.push_back({metric->id,tile});
+            lv_obj_add_flag(tile,LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_clear_flag(tile,LV_OBJ_FLAG_EVENT_BUBBLE);
+            if(metric->domain=="switch" || metric->domain=="light" ||
                metric->domain=="input_boolean" || metric->domain=="button" ||
-               metric->domain=="fan" || metric->domain=="climate")) {
+               metric->domain=="fan" || metric->domain=="climate") {
               card.composite_controls.push_back({metric->id,tile});
-              lv_obj_add_flag(tile,LV_OBJ_FLAG_CLICKABLE);
-              lv_obj_add_event_cb(tile,[](lv_event_t *event) {
-                auto *self=static_cast<RoomDevices *>(lv_event_get_user_data(event));
-                if(!self->online_ || hmh_navigation_blocked) return;
-                lv_obj_t *target=static_cast<lv_obj_t *>(lv_event_get_target(event));
-                for(const auto &card:self->cards_) for(const auto &control:card.composite_controls) {
-                  if(control.second!=target) continue;
-                  const Entity *child=self->find(control.first);
-                  if(!child || !self->available(*child)) return;
-                  if(child->domain=="climate") {self->open_climate(*child);return;}
-                  if(child->domain=="light" && (child->brightness_supported || child->color_supported)) {
-                    self->open_detail(*child);return;
-                  }
-                  if(!self->on_command) return;
-                  const std::string action=child->domain=="button"?"button.press":
-                      child->domain+(child->state=="on"?".turn_off":".turn_on");
-                  self->on_command(action,child->id);
-                  return;
-                }
-              },LV_EVENT_CLICKED,this);
             }
+            lv_obj_add_event_cb(tile,[](lv_event_t *event) {
+              auto *self=static_cast<RoomDevices *>(lv_event_get_user_data(event));
+              if(hmh_navigation_blocked) return;
+              lv_obj_t *target=static_cast<lv_obj_t *>(lv_event_get_target(event));
+              for(const auto &card:self->cards_) for(const auto &item:card.composite_targets) {
+                if(item.second!=target) continue;
+                const Entity *child=self->find(item.first);
+                if(!child) return;
+                if(child->domain=="sensor") {self->open_history(*child);return;}
+                if(!self->online_ || !self->available(*child)) return;
+                if(child->domain=="climate") {self->open_climate(*child);return;}
+                if(child->domain=="light" && (child->brightness_supported || child->color_supported)) {
+                  self->open_detail(*child);return;
+                }
+                if(child->domain=="binary_sensor") return;
+                if(!self->on_command) return;
+                const std::string action=child->domain=="button"?"button.press":
+                    child->domain+(child->state=="on"?".turn_off":".turn_on");
+                self->on_command(action,child->id);
+                return;
+              }
+            },LV_EVENT_CLICKED,this);
             ++index;
           }
         }
