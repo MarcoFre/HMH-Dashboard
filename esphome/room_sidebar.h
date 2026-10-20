@@ -1839,17 +1839,78 @@ class RoomDevices {
       const int tile_columns=card_columns*2;
       HmhTileGrid tile_grid(inner_width,tile_columns,responsive.size(40),gap);
       tile_grid.reset(layout_y);
+      // Conservative paired-category layout: only two consecutive categories
+      // containing exactly one ordinary standalone control/sensor each.
+      // Positions are computed before LVGL objects are created; no post-layout
+      // moves or live reflow (which previously broke visibility and drag).
+      std::vector<int> paired_first,paired_second, ordered_groups;
+      if(!categories && card_columns>=2) {
+        for(const Entity *item:all_selected) {
+          const int g=section(*item);
+          if(std::find(ordered_groups.begin(),ordered_groups.end(),g)==ordered_groups.end())
+            ordered_groups.push_back(g);
+        }
+        auto narrow_group=[&](int group)->bool {
+          if(hmh_widget_layout.collapsed(area_,group)) return false;
+          const Entity *only=nullptr;
+          for(const Entity *item:all_selected) if(section(*item)==group) {
+            if(only) return false;
+            only=item;
+          }
+          if(!only) return false;
+          const std::string key=block_key(*only);
+          for(const auto &b:device_blocks_)
+            if(b.key==key && b.grouped) return false;
+          if(hmh_widget_layout.device_closed(key)) return false;
+          return only->domain=="sensor" || only->domain=="binary_sensor" ||
+              only->domain=="switch" || only->domain=="input_boolean" ||
+              only->domain=="button" ||
+              (only->domain=="light" && !only->brightness_supported);
+        };
+        for(size_t n=0;n+1<ordered_groups.size();) {
+          if(narrow_group(ordered_groups[n]) && narrow_group(ordered_groups[n+1])) {
+            paired_first.push_back(ordered_groups[n]);
+            paired_second.push_back(ordered_groups[n+1]);
+            n+=2;
+          } else ++n;
+        }
+      }
+      const int paired_half_width=(inner_width-gap)/2;
+      const int paired_right_x=paired_half_width+gap;
+      int paired_pending_group=-1,paired_origin_y=0,paired_first_bottom=0;
+      int category_x_offset=0;
       for (size_t i = 0; i < all_selected.size(); ++i) {
         const auto &e = *all_selected[i];
         int group = section(e);
         if (group != previous_section) {
-          layout_y = tile_grid.bottom();
+          const bool second_of_pair=group==paired_pending_group;
+          if(second_of_pair) {
+            paired_first_bottom=tile_grid.bottom();
+            layout_y=paired_origin_y;
+            category_x_offset=paired_right_x;
+          } else {
+            layout_y=paired_pending_group>=0?
+                std::max(paired_first_bottom,tile_grid.bottom()):tile_grid.bottom();
+            category_x_offset=0;
+          }
+          paired_pending_group=-1;
+          const bool first_of_pair=std::find(paired_first.begin(),paired_first.end(),group)!=paired_first.end();
+          if(first_of_pair) {
+            const auto it=std::find(paired_first.begin(),paired_first.end(),group);
+            paired_pending_group=paired_second[static_cast<size_t>(it-paired_first.begin())];
+            paired_origin_y=layout_y;
+          }
+          if(first_of_pair || second_of_pair)
+            tile_grid=HmhTileGrid(paired_half_width,2,responsive.size(40),gap);
+          else
+            tile_grid=HmhTileGrid(inner_width,tile_columns,responsive.size(40),gap);
           tile_grid.reset(layout_y);
           const char *title = group == 0 ? "LUCI" : group == 1 ? "INTERRUTTORI" : group == 2 ? "TERMOSTATI" : group == 3 ? "SENSORI" : group == 4 ? "APERTURE" : group == 5 ? "ENERGIA" : group == 7 ? "VENTILATORI" : group == 10 ? "ALLARME" : group == 9 ? "PURIFICATORI" : group == 8 ? "PORTE E FINESTRE" : "PULSANTI";
           size_t count = 0; for (const auto *item : all_selected) if (section(*item) == group) ++count;
           bool closed = !categories && hmh_widget_layout.collapsed(area_, group);
           std::string caption = std::string(categories ? "" : closed ? "+ " : "- ") + title + " · " + std::to_string(count);
-          auto *heading = make_label(list_, 2, layout_y, layout_width_ - 18, caption.c_str());
+          auto *heading = make_label(list_, 2+category_x_offset, layout_y,
+               first_of_pair || second_of_pair ? paired_half_width-8 : layout_width_-18, caption.c_str());
           lv_obj_set_height(heading, 24);
           lv_obj_set_style_text_color(heading, hmh_color(0x22D3EE), 0);
           if (!categories) {
@@ -1955,7 +2016,7 @@ class RoomDevices {
         card.energy_composite = energy_composite;
         card.width = card_width;
         card.obj = lv_btn_create(list_);
-        lv_obj_set_pos(card.obj,slot.x,slot.y);
+        lv_obj_set_pos(card.obj,slot.x+category_x_offset,slot.y);
         lv_obj_set_size(card.obj,card_width,card_height);
         lv_obj_set_style_radius(card.obj, 16, 0);
         lv_obj_set_style_pad_all(card.obj, 0, 0);
