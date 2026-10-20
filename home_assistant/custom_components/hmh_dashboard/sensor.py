@@ -225,7 +225,7 @@ class DashboardCatalog(SensorEntity):
     def _queue_refresh(self):
         # Collapse bursts of registry/state events into one catalog update.
         if self._cancel_timer is None:
-            handle = self._hass.loop.call_later(0.15, self._refresh)
+            handle = self._hass.loop.call_later(0.75, self._refresh)
             self._cancel_timer = handle.cancel
 
     @callback
