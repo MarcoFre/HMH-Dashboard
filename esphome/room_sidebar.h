@@ -684,7 +684,7 @@ class RoomDevices {
       auto *self = static_cast<RoomDevices *>(lv_timer_get_user_data(timer));
       if (lv_indev_get_state(self->drag_input_) == LV_INDEV_STATE_RELEASED) { self->update_drag(); self->finish_drag(); }
       else self->update_drag();
-    }, 30, this);
+    }, 60, this);
     update_drag();
   }
   void update_drag() {
@@ -735,10 +735,10 @@ class RoomDevices {
         }
       }
     }
-    if(nearest && !drag_category_ && drag_device_.empty()) {
-      preview_reflow();
-      lv_obj_add_flag(drop_marker_,LV_OBJ_FLAG_HIDDEN);
-    } else if(nearest) {
+    // Stability fallback: do not move live LVGL card trees in the touch timer.
+    // Keep the cyan drag ghost; use a light slot marker until an offline
+    // preview layout can be validated on the target hardware.
+    if(nearest) {
       lv_obj_clear_flag(drop_marker_,LV_OBJ_FLAG_HIDDEN);
       int marker_y=lv_obj_get_y(nearest)+(drop_after_?lv_obj_get_height(nearest):-4);
       if(!drag_device_.empty() && drop_after_) {
