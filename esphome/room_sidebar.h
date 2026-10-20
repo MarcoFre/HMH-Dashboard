@@ -234,6 +234,7 @@ static HmhWidgetLayout hmh_widget_layout;
 class RoomDevices {
  public:
   struct Entity {
+    uint64_t content_signature = 0;
     std::string id, area, name, domain, state, device_class, unit, device, device_name;
     std::string power_state, power_unit, weather_condition, chip_glyph;
     bool has_power = false, chip = false;
@@ -256,6 +257,7 @@ class RoomDevices {
     int brightness = 0, red = 255, green = 255, blue = 255;
   };
   struct Card {
+    uint64_t last_content_signature = 0;
     lv_obj_t *icon_tile = nullptr, *icon = nullptr, *rgb_dot = nullptr, *slider = nullptr;
     HmhBatteryWidget battery;
     std::vector<std::pair<lv_obj_t *,std::string>> alarm_buttons;
@@ -392,6 +394,10 @@ class RoomDevices {
         if (!item["id"].is<const char *>() || !item["area"].is<const char *>() ||
             !item["name"].is<const char *>() || !item["state"].is<const char *>()) return false;
         Entity e;
+        // Fingerprint one entity, so unrelated state changes leave its LVGL card untouched.
+        std::string serialized_entity;
+        serializeJson(item, serialized_entity);
+        e.content_signature = hmh_catalog_signature(serialized_entity);
         e.id = item["id"].as<const char *>();
         e.area = item["area"].as<const char *>();
         e.name = item["name"].as<const char *>();
@@ -454,7 +460,7 @@ class RoomDevices {
     entities_ = std::move(incoming);
     payload_signature_ = signature; payload_size_ = payload.size(); has_payload_ = true;
     received_ = true;
-    refresh(false);
+    refresh(false, true);
   }
 
  private:
@@ -1458,7 +1464,7 @@ class RoomDevices {
       lv_obj_set_style_text_color(card.name,hmh_color(0xEAF2FF),0);lv_obj_set_style_text_color(card.room,hmh_color(0x94A3B8),0);
     }
   }
-  void refresh(bool force_rebuild) {
+  void refresh(bool force_rebuild, bool incremental = false) {
     if (!list_ || !visible_ || dragging_) return;
     if(area_=="@energy") {refresh_energy();return;}
     if(energy_view_) {energy_view_=false;lv_obj_set_y(hint_,128);force_rebuild=true;}
@@ -1754,6 +1760,9 @@ class RoomDevices {
     for (size_t i = 0; i < selected.size(); ++i) {
       auto &card = cards_[i];
       const auto &e = *selected[i];
+      // Only catalog-driven updates are incremental. Theme, online state and
+      // explicit refresh calls still repaint all visible cards.
+      if (incremental && !rebuild && card.last_content_signature == e.content_signature) continue;
       // Aggiorna i widget esistenti senza perdere lo scorrimento.
       lv_label_set_text(card.name, e.name.c_str());
       if (card.room_label) {
@@ -1891,6 +1900,7 @@ class RoomDevices {
         lv_obj_set_style_bg_color(card.lamp, color, 0);
         lv_obj_set_style_bg_color(card.lamp_base, color, 0);
       }
+      card.last_content_signature = e.content_signature;
     }
     sync_detail_status();
   }
