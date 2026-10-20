@@ -691,7 +691,7 @@ class RoomDevices {
     lv_point_t point; lv_indev_get_point(drag_input_, &point);
     lv_obj_set_pos(drag_ghost_,
         std::clamp(static_cast<int>(point.x)-lv_obj_get_width(drag_ghost_)/2,0,
-          std::max(0,800-lv_obj_get_width(drag_ghost_))),
+          std::max(0,800-static_cast<int>(lv_obj_get_width(drag_ghost_)))),
         std::clamp(static_cast<int>(point.y)-44,0,428));
     lv_area_t bounds; lv_obj_get_coords(list_, &bounds);
     if (point.y < bounds.y1 + 35) lv_obj_scroll_by(list_, 0, 10, LV_ANIM_OFF);
