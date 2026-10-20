@@ -1879,7 +1879,7 @@ class RoomDevices {
       // with one labelled metric. Compute the column before creating LVGL
       // objects; never relocate existing objects after the layout is built.
       std::vector<std::pair<std::string,std::string>> device_pairs;
-      if(card_columns>=2) {
+      if(card_columns>=2 && !categories) {
         for(size_t n=0;n+1<device_blocks_.size();) {
           const auto &a=device_blocks_[n], &b=device_blocks_[n+1];
           auto compact=[&](const DeviceBlock &block)->bool {
@@ -1908,6 +1908,10 @@ class RoomDevices {
         const auto &e = *all_selected[i];
         int group = section(e);
         if (group != previous_section) {
+          // Device pairs never cross category boundaries.
+          device_pair_next.clear();
+          device_pair_left=false;
+          device_pair_right=false;
           const bool second_of_pair=group==paired_pending_group;
           if(second_of_pair) {
             paired_first_bottom=tile_grid.bottom();
