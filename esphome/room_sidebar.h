@@ -788,7 +788,21 @@ class RoomDevices {
     lv_obj_clear_flag(drag_ghost_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_clear_flag(drag_ghost_, LV_OBJ_FLAG_SCROLLABLE);
     const Entity *e = find(entity);
-    auto *caption = make_label(drag_ghost_, 0, 0, 218, e ? e->name.c_str() : device.empty() ? "Sposta categoria" : "Sposta dispositivo");
+    const char *category_names[]={"Luci","Interruttori","Termostati","Sensori",
+        "Aperture","Energia","Pulsanti","Ventilatori","Porte e finestre",
+        "Purificatori","Allarme"};
+    std::string drag_title=e?e->name:
+        drag_category_ && group>=0 && group<11?std::string(category_names[group]):
+        device.empty()?"Sposta categoria":"Sposta dispositivo";
+    if(drag_category_ || !device.empty()) {
+      lv_obj_set_width(drag_ghost_,std::max(180,layout_width_-20));
+      lv_obj_set_height(drag_ghost_,52);
+    }
+    auto *caption = make_label(drag_ghost_, 0, 0,
+        std::max(30,static_cast<int>(lv_obj_get_width(drag_ghost_))-18),
+        drag_title.c_str());
+    lv_obj_set_style_text_font(caption,hmh_runtime_text_20,0);
+    lv_label_set_long_mode(caption,LV_LABEL_LONG_DOT);
     lv_obj_set_style_text_color(caption, lv_color_hex(0xFFFFFF), 0);
     drop_marker_ = lv_obj_create(list_);
     lv_obj_set_size(drop_marker_, (drag_category_ || !drag_device_.empty()) ? layout_width_ - 20 : (layout_width_ - 26) / 2, 4);
@@ -857,6 +871,20 @@ class RoomDevices {
     // preview layout can be validated on the target hardware.
     if(nearest) {
       lv_obj_clear_flag(drop_marker_,LV_OBJ_FLAG_HIDDEN);
+      if(drag_category_) {
+        // Highlight the entire destination heading, not only a thin cyan line.
+        // This is a cheap overlay, never a live movement of category widget trees.
+        lv_obj_set_size(drop_marker_,
+            std::max(40,layout_width_-20),28);
+        lv_obj_set_style_radius(drop_marker_,8,0);
+        lv_obj_set_style_border_width(drop_marker_,2,0);
+        lv_obj_set_style_border_color(drop_marker_,lv_color_hex(0x22D3EE),0);
+        lv_obj_set_style_bg_color(drop_marker_,lv_color_hex(0x103D52),0);
+        lv_obj_set_style_bg_opa(drop_marker_,LV_OPA_40,0);
+        lv_obj_set_pos(drop_marker_,lv_obj_get_x(nearest),lv_obj_get_y(nearest));
+        lv_obj_move_foreground(drop_marker_);
+        return;
+      }
       int marker_y=lv_obj_get_y(nearest)+(drop_after_?lv_obj_get_height(nearest):-4);
       if(!drag_device_.empty() && drop_after_) {
         for(const auto &card:cards_) {
