@@ -377,6 +377,7 @@ class RoomDevices {
     if (!dragging_) return;
     lv_timer_delete(drag_timer_); drag_timer_ = nullptr;
     lv_obj_delete(drag_ghost_); drag_ghost_ = nullptr;
+    restore_preview();
     lv_obj_delete(drop_marker_); drop_marker_ = nullptr;
     lv_obj_add_flag(list_, LV_OBJ_FLAG_SCROLLABLE);
     dragging_ = false; layout_dirty_ = true; refresh(false);
@@ -549,6 +550,53 @@ class RoomDevices {
   int drag_group_ = -1, drop_group_ = -1, pending_group_ = -1;
   std::string drag_entity_, drop_entity_;
   lv_obj_t *drag_ghost_ = nullptr, *drop_marker_ = nullptr;
+  std::vector<std::pair<lv_obj_t *,lv_point_t>> preview_original_;
+  std::string preview_target_;
+  bool preview_after_=false;
+  void restore_preview() {
+    for(const auto &entry:preview_original_)
+      lv_obj_set_pos(entry.first,entry.second.x,entry.second.y);
+    preview_original_.clear();preview_target_.clear();
+  }
+  void preview_reflow() {
+    if(drag_category_ || !drag_device_.empty() || drag_entity_.empty() || drop_entity_.empty()) return;
+    if(preview_target_==drop_entity_ && preview_after_==drop_after_) return;
+    restore_preview();
+    std::vector<Card *> ordered;
+    for(auto &card:cards_) {
+      auto *e=find(card.entity_id);
+      if(e && section(*e)==drag_group_) ordered.push_back(&card);
+    }
+    auto source=std::find_if(ordered.begin(),ordered.end(),[&](const Card *card){return card->entity_id==drag_entity_;});
+    auto target=std::find_if(ordered.begin(),ordered.end(),[&](const Card *card){return card->entity_id==drop_entity_;});
+    if(source==ordered.end() || target==ordered.end() || ordered.size()<2) return;
+    // Preserve the actual current positions for a reversible, commit-free preview.
+    std::sort(ordered.begin(),ordered.end(),[](const Card *a,const Card *b){
+      const int ay=lv_obj_get_y(a->obj),by=lv_obj_get_y(b->obj);
+      return ay==by?lv_obj_get_x(a->obj)<lv_obj_get_x(b->obj):ay<by;
+    });
+    const int y0=lv_obj_get_y(ordered.front()->obj);
+    for(auto *card:ordered)
+      preview_original_.push_back({card->obj,{static_cast<lv_coord_t>(lv_obj_get_x(card->obj)),static_cast<lv_coord_t>(lv_obj_get_y(card->obj))}});
+    auto it=std::find_if(ordered.begin(),ordered.end(),[&](const Card *card){return card->entity_id==drag_entity_;});
+    Card *moving=*it;ordered.erase(it);
+    auto dest=std::find_if(ordered.begin(),ordered.end(),[&](const Card *card){return card->entity_id==drop_entity_;});
+    if(dest!=ordered.end() && drop_after_) ++dest;
+    ordered.insert(dest,moving);
+    const HmhLayout layout=HmhLayout::current();
+    const int gap=layout.size(8),inner_width=std::max(1,layout_width_-layout.size(14));
+    const int cols=std::clamp((inner_width+gap)/(layout.size(255)+gap),1,3)*2;
+    const int tile_height=layout.size(40);
+    const int cw=std::max(1,(inner_width-(cols-1)*gap)/cols);
+    HmhTileGrid grid(inner_width,cols,tile_height,gap);grid.reset(y0);
+    for(auto *card:ordered) {
+      const int w=lv_obj_get_width(card->obj),h=lv_obj_get_height(card->obj);
+      auto place=grid.place(std::clamp((w+gap)/(cw+gap),1,cols),
+                           std::max(1,(h+gap)/(tile_height+gap)));
+      lv_obj_set_pos(card->obj,place.x,place.y);
+    }
+    preview_target_=drop_entity_;preview_after_=drop_after_;
+  }
   lv_timer_t *drag_timer_ = nullptr;
   lv_indev_t *drag_input_ = nullptr;
   static void layout_event(lv_event_t *event) {
@@ -610,10 +658,14 @@ class RoomDevices {
     lv_indev_wait_release(drag_input_);
     lv_obj_clear_flag(list_, LV_OBJ_FLAG_SCROLLABLE);
     drag_ghost_ = lv_obj_create(lv_layer_top());
-    lv_obj_set_size(drag_ghost_, 240, 52);
+    const Card *drag_card=nullptr;
+    for(const auto &card:cards_) if(card.entity_id==entity) {drag_card=&card;break;}
+    lv_obj_set_size(drag_ghost_,drag_card?drag_card->width:240,
+        drag_card?lv_obj_get_height(drag_card->obj):52);
     lv_obj_set_style_pad_all(drag_ghost_, 8, 0);
     lv_obj_set_style_radius(drag_ghost_, 12, 0);
-    lv_obj_set_style_bg_color(drag_ghost_, hmh_color(0x0891B2), 0);
+    lv_obj_set_style_bg_color(drag_ghost_, hmh_color(0x10273D), 0);
+    lv_obj_set_style_bg_opa(drag_ghost_,LV_OPA_70,0);
     lv_obj_set_style_border_width(drag_ghost_, 2, 0);
     lv_obj_set_style_border_color(drag_ghost_, lv_color_hex(0x22D3EE), 0);
     lv_obj_clear_flag(drag_ghost_, LV_OBJ_FLAG_CLICKABLE);
@@ -637,7 +689,10 @@ class RoomDevices {
   }
   void update_drag() {
     lv_point_t point; lv_indev_get_point(drag_input_, &point);
-    lv_obj_set_pos(drag_ghost_, std::clamp(static_cast<int>(point.x) - 120, 0, 560), std::clamp(static_cast<int>(point.y) - 65, 0, 428));
+    lv_obj_set_pos(drag_ghost_,
+        std::clamp(static_cast<int>(point.x)-lv_obj_get_width(drag_ghost_)/2,0,
+          std::max(0,800-lv_obj_get_width(drag_ghost_))),
+        std::clamp(static_cast<int>(point.y)-44,0,428));
     lv_area_t bounds; lv_obj_get_coords(list_, &bounds);
     if (point.y < bounds.y1 + 35) lv_obj_scroll_by(list_, 0, 10, LV_ANIM_OFF);
     else if (point.y > bounds.y2 - 35) lv_obj_scroll_by(list_, 0, -10, LV_ANIM_OFF);
@@ -680,7 +735,11 @@ class RoomDevices {
         }
       }
     }
-    if (nearest) {
+    if(nearest && !drag_category_ && drag_device_.empty()) {
+      preview_reflow();
+      lv_obj_add_flag(drop_marker_,LV_OBJ_FLAG_HIDDEN);
+    } else if(nearest) {
+      lv_obj_clear_flag(drop_marker_,LV_OBJ_FLAG_HIDDEN);
       int marker_y=lv_obj_get_y(nearest)+(drop_after_?lv_obj_get_height(nearest):-4);
       if(!drag_device_.empty() && drop_after_) {
         for(const auto &card:cards_) {
