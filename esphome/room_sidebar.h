@@ -296,6 +296,7 @@ class RoomDevices {
     std::vector<std::pair<lv_obj_t *,std::string>> alarm_buttons;
     std::string entity_id;
     bool uniform_composite = false;
+    bool energy_composite = false;
     int width = 0;
     lv_obj_t *minus = nullptr, *plus = nullptr, *mode = nullptr, *target = nullptr;
     float requested = NAN;
@@ -1674,20 +1675,31 @@ class RoomDevices {
                 [](const Entity *item){return item->domain=="switch" || item->domain=="input_boolean";});
         const bool uniform_composite=sensor_only_composite || switch_only_composite;
         const int requested_columns=(is_alarm || composite_purifier)?4:2;
+        // Layout is driven by the content kind, not a fixed composite height.
+        // Numerical values need a taller cell than status-only switches.
+        const bool energy_composite=composite_purifier && !uniform_composite &&
+            e.domain=="switch" && e.has_power && composite_block->items.size()>=3;
         const int composite_count=composite_purifier?
-            static_cast<int>(composite_block->items.size())-(uniform_composite?0:1):0;
-        // Two metrics per row; reserve space above the metrics for fan controls.
-        const int metric_rows=(composite_count+1)/2;
-        const bool compact_switch_metrics=composite_purifier && !uniform_composite &&
-            (e.domain=="switch" || e.domain=="input_boolean") && !has_control;
-        const int metrics_top=uniform_composite?responsive.size(16):
-            compact_switch_metrics?responsive.size(82):responsive.size(145);
-        const int metrics_bottom=metrics_top+metric_rows*responsive.size(57)+
+            static_cast<int>(composite_block->items.size())-(uniform_composite?0:1)+(energy_composite?1:0):0;
+        const bool all_switches=uniform_composite && switch_only_composite;
+        const int metric_cols=(composite_count==3 && (all_switches || energy_composite))?3:2;
+        const int metric_rows=(composite_count+metric_cols-1)/metric_cols;
+        const bool numeric_metrics=sensor_only_composite || energy_composite;
+        const int metric_height=responsive.size(numeric_metrics?76:all_switches?60:68);
+        const bool compact_header=composite_purifier && !uniform_composite &&
+            (e.domain=="switch" || e.domain=="input_boolean" ||
+             e.domain=="light" || e.domain=="fan") &&
+            !e.purifier;
+        const int metrics_top=uniform_composite?responsive.size(12):
+            compact_header?responsive.size(76):responsive.size(145);
+        const int metrics_bottom=metrics_top+metric_rows*metric_height+
             std::max(0,metric_rows-1)*responsive.size(8);
-        const int content_bottom=metric_rows?metrics_bottom+responsive.size(12):metrics_top+responsive.size(12);
+        // Slider has to sit below the metrics, not overlap or leave a blank band.
+        const bool slider_below_metrics=composite_purifier && has_control &&
+            (e.domain=="light" || e.domain=="fan") && compact_header;
+        const int content_bottom=metrics_bottom+responsive.size(slider_below_metrics?56:12);
         const int tile_pitch=responsive.size(40)+gap;
-        // Uniform grids contain only metric tiles: two rows need no hero-sized minimum.
-        const int composite_rows=std::max((uniform_composite || compact_switch_metrics)?2:3,
+        const int composite_rows=std::max(2,
             (content_bottom+gap+tile_pitch-1)/tile_pitch);
         // Alarm actions start at y=78/88, with 42 px row pitch and 34 px buttons.
         // Include the final disarm row, then reserve a small bottom breathing space.
@@ -1702,6 +1714,7 @@ class RoomDevices {
         Card card;
         card.entity_id = e.id;
         card.uniform_composite = uniform_composite;
+        card.energy_composite = energy_composite;
         card.width = card_width;
         card.obj = lv_btn_create(list_);
         lv_obj_set_pos(card.obj,slot.x,slot.y);
@@ -1929,14 +1942,18 @@ class RoomDevices {
           const int inset=responsive.size(12);
           const int metric_top=metrics_top;
           const int cell_gap=responsive.size(8);
-          const int metric_cols=2;
-          const int cell_w=(card_width-2*inset-cell_gap)/metric_cols;
-          const int cell_h=responsive.size(57);
+          const int cell_w=(card_width-2*inset-(metric_cols-1)*cell_gap)/metric_cols;
+          const int cell_h=metric_height;
           int index=0;
+          std::vector<const Entity *> metric_items;
+          if(energy_composite) metric_items.push_back(&e);
           for(const Entity *metric:composite_block->items) {
             if(metric==&e && !uniform_composite) continue;
-
-            const bool last_single=(composite_count%2)==1 && index==composite_count-1;
+            metric_items.push_back(metric);
+          }
+          for(const Entity *metric:metric_items) {
+            const bool power_tile=energy_composite && metric==&e;
+            const bool last_single=metric_cols==2 && (composite_count%2)==1 && index==composite_count-1;
             const int mx=inset+(index%metric_cols)*(cell_w+cell_gap);
             const int my=metric_top+(index/metric_cols)*(cell_h+cell_gap);
             auto *tile=lv_obj_create(card.obj);
@@ -1983,19 +2000,25 @@ class RoomDevices {
               if(short_name.empty()) short_name=metric->name;
             }
             auto *title=make_label(tile,responsive.size(28),responsive.size(2),(last_single?card_width-2*inset:cell_w)-responsive.size(42),
-                temp?"Temperatura":humid?"Umidita'":particulate?"PM2.5":short_name.c_str());
+                power_tile?"Potenza":temp?"Temperatura":humid?"Umidita'":particulate?"PM2.5":short_name.c_str());
             lv_obj_set_style_text_font(title,hmh_chip_text_14,0);
             lv_obj_set_style_text_color(title,lv_color_hex(0x94B7CE),0);
             lv_label_set_long_mode(title,LV_LABEL_LONG_DOT);
             lv_obj_set_height(title,responsive.size(20));
-            auto *value=make_label(tile,responsive.size(28),responsive.size(25),(last_single?card_width-2*inset:cell_w)-responsive.size(42),"--");
-            lv_obj_set_style_text_font(value,hmh_runtime_text_20,0);
+            const int value_y=responsive.size(numeric_metrics?31:25);
+            auto *value=make_label(tile,responsive.size(28),value_y,
+                (last_single?card_width-2*inset:cell_w)-responsive.size(42),"--");
+            lv_obj_set_height(value,cell_h-value_y-responsive.size(6));
+            lv_obj_set_style_text_font(value,
+                (metric->domain=="switch" && !power_tile) || metric->domain=="input_boolean" ||
+                metric->domain=="fan" || metric->domain=="light" ?
+                    hmh_runtime_text_16:hmh_runtime_text_20,0);
             lv_obj_set_style_text_color(value,lv_color_hex(0xF2F8FE),0);
             lv_label_set_long_mode(value,LV_LABEL_LONG_DOT);
             card.composite_metrics.push_back({metric->id,value});
-            if(metric->domain=="switch" || metric->domain=="light" ||
+            if(!power_tile && (metric->domain=="switch" || metric->domain=="light" ||
                metric->domain=="input_boolean" || metric->domain=="button" ||
-               metric->domain=="fan" || metric->domain=="climate") {
+               metric->domain=="fan" || metric->domain=="climate")) {
               card.composite_controls.push_back({metric->id,tile});
               lv_obj_add_flag(tile,LV_OBJ_FLAG_CLICKABLE);
               lv_obj_add_event_cb(tile,[](lv_event_t *event) {
@@ -2021,6 +2044,8 @@ class RoomDevices {
             ++index;
           }
         }
+        if(slider_below_metrics && card.slider)
+          lv_obj_set_y(card.slider,metrics_bottom+responsive.size(8));
         if(e.has_battery) {card.battery.create(card.obj,e.battery_entity?12:card_width-72,e.battery_entity?78:2,!e.battery_entity);if(e.battery_entity) lv_obj_add_flag(card.status,LV_OBJ_FLAG_HIDDEN);}
         lv_obj_add_event_cb(card.obj, [](lv_event_t *event) {
           auto *self = static_cast<RoomDevices *>(lv_event_get_user_data(event));
@@ -2069,6 +2094,8 @@ class RoomDevices {
         if (e.domain == "light") {
           status = e.brightness_supported ?
               std::to_string(active ? (e.brightness * 100 + 127) / 255 : 0) + "%" : "";
+        } else if(card.energy_composite) {
+          status=e.state=="on"?"Acceso":e.state=="off"?"Spento":"Non disponibile";
         } else if ((e.domain == "switch" && !e.has_power) || e.domain == "input_boolean") {
           status.clear();
         }
@@ -2084,7 +2111,9 @@ class RoomDevices {
         const Entity *child=find(metric.first);
         if(!child) continue;
         std::string caption=status_text(*child);
-        if(child->domain=="switch" || child->domain=="light" || child->domain=="input_boolean") caption=child->state=="on"?"Acceso":"Spento";
+        if(!(card.energy_composite && metric.first==card.entity_id) &&
+           (child->domain=="switch" || child->domain=="light" || child->domain=="input_boolean"))
+          caption=child->state=="on"?"Acceso":"Spento";
         hmh_label_set_if_changed(metric.second,caption.c_str());
       }
       // Gaia 0.8.15: colour switch tiles according to live HA state.
@@ -2139,8 +2168,13 @@ class RoomDevices {
       }
       lv_obj_set_y(card.name, (e.domain == "sensor" || e.domain == "binary_sensor") ? 14 : status.empty() && !(e.domain == "light" && e.color_supported) ? 30 : 19);
       if (e.domain == "sensor" || e.domain == "binary_sensor") {
-        lv_obj_set_style_text_font(card.status, available(e) ? (e.domain == "sensor" ? hmh_runtime_text_28 : hmh_runtime_text_20) : hmh_runtime_text_16, 0);
+        lv_obj_set_style_text_font(card.status, available(e) ? (e.domain == "sensor" ? hmh_runtime_text_28 : hmh_runtime_text_16) : hmh_runtime_text_16, 0);
         lv_obj_set_style_text_color(card.status, hmh_color(0xEAF2FF), 0);
+      } else if(e.domain=="switch" || e.domain=="input_boolean" || e.domain=="light" ||
+                e.domain=="fan" || e.domain=="cover" || e.domain=="climate") {
+        lv_obj_set_style_text_font(card.status,
+            e.domain=="switch" && e.has_power && !card.energy_composite ?
+            hmh_runtime_text_20 : hmh_runtime_text_16,0);
       }
       if (e.domain == "sensor" && card.icon) {
         hmh_label_set_if_changed(card.icon, sensor_icon(e));
