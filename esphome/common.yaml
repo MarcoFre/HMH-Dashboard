@@ -566,6 +566,18 @@ interval:
           hmh_label_set_if_changed(id(status_clock), clock_value.c_str());
           hmh_label_set_if_changed(id(status_date), date_value.c_str());
           lv_obj_set_style_text_color(id(connection_label), lv_color_hex(id(wifi_component).is_connected() && id(api_server).is_connected() ? 0x22C55E : 0xEF4444), 0);
+          // Peak processing time of recent HA catalog updates (not CPU load).
+          const uint32_t work_ms=hmh_work_read_peak();
+          const uint32_t work_color=work_ms>=250?0xEF4444:
+              work_ms>=120?0xF97316:work_ms>=60?0xFACC15:0x22C55E;
+          static uint32_t last_work_color=0;
+          if(work_color!=last_work_color) {
+            lv_obj_set_style_bg_color(id(status_work_led),lv_color_hex(work_color),0);
+            last_work_color=work_color;
+          }
+          char work_caption[20];
+          snprintf(work_caption,sizeof(work_caption),"%u ms",static_cast<unsigned>(work_ms));
+          hmh_label_set_if_changed(id(status_work_time),work_caption);
           auto now = id(dashboard_time).now();
           const bool dim = now.is_valid() && (now.hour >= 22 || now.hour < 7) &&
                            hmh_navigation.is_standby() && !hmh_status_busy;
@@ -639,6 +651,27 @@ lvgl:
                   text_align: CENTER
                   text: "--/--/----"
                   text_font: hmh_text_16
+                  text_color: 0x94A3B8
+              - obj:
+                  id: status_work_led
+                  x: 712
+                  y: 12
+                  width: 14
+                  height: 14
+                  radius: 7
+                  pad_all: 0
+                  border_width: 0
+                  bg_color: 0x22C55E
+                  scrollable: false
+                  clickable: false
+              - label:
+                  id: status_work_time
+                  x: 657
+                  y: 30
+                  width: 72
+                  text: "0 ms"
+                  text_font: hmh_text_16
+                  text_align: RIGHT
                   text_color: 0x94A3B8
               - label:
                   id: connection_label
