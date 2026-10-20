@@ -1689,7 +1689,7 @@ class RoomDevices {
         const bool compact_header=composite_purifier && !uniform_composite &&
             (e.domain=="switch" || e.domain=="input_boolean" ||
              e.domain=="light" || e.domain=="fan") &&
-            !e.purifier && !e.speed_supported && !e.color_supported;
+            !e.purifier;
         const int metrics_top=uniform_composite?responsive.size(12):
             compact_header?responsive.size(76):responsive.size(145);
         const int metrics_bottom=metrics_top+metric_rows*metric_height+
