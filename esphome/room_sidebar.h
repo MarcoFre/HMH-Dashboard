@@ -801,8 +801,12 @@ class RoomDevices {
     // The ghost is a plain absolute-position container: leave real space for
     // its label instead of relying on LVGL's default inner padding.
     lv_obj_set_style_pad_all(drag_ghost_,0,0);
-    const int ghost_width=static_cast<int>(lv_obj_get_width(drag_ghost_));
-    const int ghost_height=static_cast<int>(lv_obj_get_height(drag_ghost_));
+    // LVGL may not have resolved the newly created ghost's layout yet.
+    // Use the explicit dimensions we assigned, not lv_obj_get_width/height.
+    const int ghost_width=(drag_category_ || !device.empty())?
+        std::max(180,layout_width_-20):(drag_card?drag_card->width:240);
+    const int ghost_height=(drag_category_ || !device.empty())?52:
+        (drag_card?static_cast<int>(lv_obj_get_height(drag_card->obj)):52);
     auto *caption = make_label(drag_ghost_, 12, 0,
         std::max(30,ghost_width-24),drag_title.c_str());
     lv_obj_set_style_text_font(caption,hmh_runtime_text_20,0);
