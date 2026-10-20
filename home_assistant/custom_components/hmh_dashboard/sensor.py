@@ -448,8 +448,44 @@ class DashboardCatalog(SensorEntity):
             for item in members:
                 item["group_section"] = section
                 item["area"] = area_id
-        # Battery entities follow the same explicit-label rule as all other
-        # dashboard entities. Do not add unlabelled battery sensors from devices.
+        # Discover batteries for selected devices; one battery source per device.
+        selected_devices = {item["device"]: item["area"] for item in entity_items if item.get("device")}
+        for device_id, area_id in selected_devices.items():
+            candidates = []
+            for entry in entities.entities.values():
+                if entry.device_id != device_id or entry.disabled_by is not None: continue
+                state = self._hass.states.get(entry.entity_id)
+                attrs = state.attributes if state else {}
+                domain = entry.entity_id.split(".", 1)[0]
+                if attrs.get("device_class") != "battery" or domain not in {"sensor", "binary_sensor"}: continue
+                if domain == "sensor" and attrs.get("unit_of_measurement") != "%": continue
+                candidates.append((entry, state, attrs, domain))
+            if not candidates: continue
+            candidates.sort(key=lambda c: (c[3] != "sensor", c[0].entity_id))
+            entry, state, attrs, domain = candidates[0]
+            selected.add(entry.entity_id)
+            level = None
+            if domain == "sensor" and state:
+                try:
+                    value = float(state.state)
+                    if math.isfinite(value) and 0 <= value <= 100: level = value
+                except (ValueError, TypeError): pass
+            known = level is not None or (domain == "binary_sensor" and state and state.state in {"on", "off"})
+            metadata = {"has_battery": True, "battery_level": level,
+                        "battery_known": bool(known), "battery_low": bool(state and domain == "binary_sensor" and state.state == "on")}
+            for item in entity_items:
+                if item.get("device") == device_id: item.update(metadata)
+            existing = next((item for item in entity_items if item["id"] == entry.entity_id), None)
+            if existing:
+                existing["battery_entity"] = True
+            else:
+                device = devices.async_get(device_id)
+                name = (device.name_by_user or device.name) if device else None
+                entity_items.append({"id": entry.entity_id, "area": area_id,
+                    "name": name or attrs.get("friendly_name") or entry.original_name or entry.entity_id,
+                    "state": state.state if state else "unavailable", "device_class": "battery",
+                    "device": device_id, "device_name": name or "", "unit": "%" if domain == "sensor" else "",
+                    "chip": False, "battery_only": True, "battery_entity": True, **metadata})
         # Explicitly selected standalone battery sensors also appear in the battery page.
         for item in entity_items:
             if item["device_class"] != "battery" or item.get("battery_entity"): continue
