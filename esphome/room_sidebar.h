@@ -2281,6 +2281,76 @@ class RoomDevices {
         }
         cards_.push_back(std::move(card));
       }
+      // Pack consecutive narrow categories side by side. This is a one-shot
+      // rebuild-time layout pass: no live widget relocation while dragging.
+      // Grouped devices and full-width sections are intentionally excluded.
+      if(!categories && card_columns>=2 && headings_.size()>1) {
+        struct CategoryGeometry {
+          int group=0,start=0,end=0;
+          bool narrow=false;
+          std::vector<lv_obj_t *> widgets;
+        };
+        std::vector<CategoryGeometry> groups;
+        for(size_t j=0;j<headings_.size();++j) {
+          const auto &heading=headings_[j];
+          CategoryGeometry info;
+          info.group=heading.group;
+          info.start=static_cast<int>(lv_obj_get_y(heading.obj));
+          info.end=(j+1<headings_.size())?
+              static_cast<int>(lv_obj_get_y(headings_[j+1].obj)):
+              static_cast<int>(tile_grid.bottom());
+          bool has_card=false,has_device_heading=false;
+          info.narrow=true;
+          for(const auto &h:device_headings_) if(h.group==info.group)
+            has_device_heading=true;
+          for(const auto &card:cards_) {
+            const Entity *ce=find(card.entity_id);
+            if(!ce || section(*ce)!=info.group) continue;
+            has_card=true;
+            info.widgets.push_back(card.obj);
+            if(lv_obj_get_x(card.obj)!=0 ||
+               static_cast<int>(lv_obj_get_width(card.obj))>inner_width/2)
+              info.narrow=false;
+          }
+          info.narrow=info.narrow && has_card && !has_device_heading;
+          groups.push_back(std::move(info));
+        }
+        const int half_width=(inner_width-gap)/2;
+        const int right_x=half_width+gap;
+        int reclaimed=0;
+        for(size_t j=0;j<groups.size();) {
+          auto &first=groups[j];
+          const bool pair=j+1<groups.size() && first.narrow && groups[j+1].narrow;
+          if(pair) {
+            auto &second=groups[j+1];
+            const int first_height=first.end-first.start;
+            const int second_height=second.end-second.start;
+            const int top=first.start-reclaimed;
+            auto *heading_a=headings_[j].obj;
+            auto *heading_b=headings_[j+1].obj;
+            lv_obj_set_pos(heading_a,2,top);
+            lv_obj_set_width(heading_a,std::max(40,half_width-4));
+            lv_obj_set_pos(heading_b,right_x+2,top);
+            lv_obj_set_width(heading_b,std::max(40,half_width-4));
+            for(auto *widget:first.widgets)
+              lv_obj_set_y(widget,static_cast<int>(lv_obj_get_y(widget))-reclaimed);
+            for(auto *widget:second.widgets) {
+              const int relative_y=static_cast<int>(lv_obj_get_y(widget))-second.start;
+              lv_obj_set_pos(widget,right_x,top+relative_y);
+            }
+            reclaimed+=std::min(first_height,second_height);
+            j+=2;
+          } else {
+            auto *heading=headings_[j].obj;
+            lv_obj_set_y(heading,static_cast<int>(lv_obj_get_y(heading))-reclaimed);
+            for(auto *widget:first.widgets)
+              lv_obj_set_y(widget,static_cast<int>(lv_obj_get_y(widget))-reclaimed);
+            for(const auto &h:device_headings_) if(h.group==first.group)
+              lv_obj_set_y(h.obj,static_cast<int>(lv_obj_get_y(h.obj))-reclaimed);
+            ++j;
+          }
+        }
+      }
       if (force_rebuild) lv_obj_scroll_to_y(list_, 0, LV_ANIM_OFF);
     }
     std::string hint;
