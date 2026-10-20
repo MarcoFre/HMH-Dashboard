@@ -1878,6 +1878,7 @@ class RoomDevices {
       const int paired_half_width=(inner_width-gap)/2;
       const int paired_right_x=paired_half_width+gap;
       int paired_pending_group=-1,paired_origin_y=0,paired_first_bottom=0;
+      bool paired_second_active=false;
       int category_x_offset=0;
       for (size_t i = 0; i < all_selected.size(); ++i) {
         const auto &e = *all_selected[i];
@@ -1889,10 +1890,11 @@ class RoomDevices {
             layout_y=paired_origin_y;
             category_x_offset=paired_right_x;
           } else {
-            layout_y=paired_pending_group>=0?
+            layout_y=paired_second_active?
                 std::max(paired_first_bottom,tile_grid.bottom()):tile_grid.bottom();
             category_x_offset=0;
           }
+          paired_second_active=second_of_pair;
           paired_pending_group=-1;
           const bool first_of_pair=std::find(paired_first.begin(),paired_first.end(),group)!=paired_first.end();
           if(first_of_pair) {
