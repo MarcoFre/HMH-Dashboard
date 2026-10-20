@@ -1,4 +1,4 @@
-# HMH Dashboard common 0.8.17 Gaia Composite Devices - GUI & runtime shared across Sunton/Waveshare
+# HMH Dashboard common 0.8.18 Gaia Composite Devices - GUI & runtime shared across Sunton/Waveshare
 # Non installare direttamente: importato dai file entrypoint tramite packages.
 
 substitutions:
@@ -34,10 +34,10 @@ esphome:
           brightness: 100%
           transition_length: 0s
       - lambda: |-
-          ESP_LOGI("ha_dashboard", "HMH Dashboard multi-hardware 0.8.17 Gaia Composite Devices");
+          ESP_LOGI("ha_dashboard", "HMH Dashboard multi-hardware 0.8.18 Gaia Composite Devices");
           const auto hmh_screen = HmhLayout::current();
           char hmh_build_caption[48];
-          snprintf(hmh_build_caption, sizeof(hmh_build_caption), "v0.8.17 | %dx%d", hmh_screen.width, hmh_screen.height);
+          snprintf(hmh_build_caption, sizeof(hmh_build_caption), "v0.8.18 | %dx%d", hmh_screen.width, hmh_screen.height);
           lv_label_set_text(id(status_build_label), hmh_build_caption);
           hmh_history_client=esphome::get_mac_address();
           hmh_calendar.attach(id(page_rooms)->obj);
@@ -561,8 +561,10 @@ interval:
           hmh_navigation.tick();
           auto status_now = id(dashboard_time).now();
           if(status_now.is_valid())hmh_calendar.set_now(status_now.year,status_now.month,status_now.day_of_month,status_now.hour,status_now.minute);
-          lv_label_set_text(id(status_clock), status_now.is_valid() ? status_now.strftime("%H:%M").c_str() : "--:--");
-          lv_label_set_text(id(status_date), status_now.is_valid() ? status_now.strftime("%d/%m/%Y").c_str() : "--/--/----");
+          const std::string clock_value = status_now.is_valid() ? status_now.strftime("%H:%M") : "--:--";
+          const std::string date_value = status_now.is_valid() ? status_now.strftime("%d/%m/%Y") : "--/--/----";
+          hmh_label_set_if_changed(id(status_clock), clock_value.c_str());
+          hmh_label_set_if_changed(id(status_date), date_value.c_str());
           lv_obj_set_style_text_color(id(connection_label), lv_color_hex(id(wifi_component).is_connected() && id(api_server).is_connected() ? 0x22C55E : 0xEF4444), 0);
           auto now = id(dashboard_time).now();
           const bool dim = now.is_valid() && (now.hour >= 22 || now.hour < 7) &&
@@ -618,7 +620,7 @@ lvgl:
                   x: 16
                   y: 31
                   width: 240
-                  text: "v0.8.17 | --x--"
+                  text: "v0.8.18 | --x--"
                   text_font: hmh_text_16
                   text_color: 0x94A3B8
               - label:
