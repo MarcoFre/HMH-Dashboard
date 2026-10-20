@@ -2105,6 +2105,22 @@ class RoomDevices {
         lv_obj_add_flag(card.status,LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(card.icon_tile,LV_OBJ_FLAG_HIDDEN);
       }
+      // State-driven backgrounds for every interactive metric tile.
+      // Read-only numerical tiles keep their neutral background.
+      for(const auto &control:card.composite_controls) {
+        const Entity *child=find(control.first);
+        if(!child) continue;
+        const bool online_state=available(*child);
+        const bool on_state=online_state &&
+            (child->state=="on" ||
+             (child->domain=="climate" && child->state!="off") ||
+             (child->domain=="fan" && child->state=="on"));
+        const uint32_t fill=on_state?0x24563D:0x19354D;
+        lv_obj_set_style_bg_color(control.second,lv_color_hex(fill),0);
+        lv_obj_set_style_border_width(control.second,on_state?1:0,0);
+        lv_obj_set_style_border_color(control.second,lv_color_hex(0x34D399),0);
+        lv_obj_set_style_bg_opa(control.second,online_state?LV_OPA_COVER:LV_OPA_60,0);
+      }
       for(const auto &metric:card.composite_metrics) {
         const Entity *child=find(metric.first);
         if(!child) continue;
@@ -2193,11 +2209,31 @@ class RoomDevices {
       if(e.domain=="alarm_control_panel") {
         lv_obj_clear_flag(card.obj,LV_OBJ_FLAG_CLICKABLE);
         bool enabled=online_ && available(e) && e.state!="arming" && e.state!="disarming";
+        const bool alarm_available=available(e);
+        const bool alarm_triggered=e.state=="triggered";
+        const uint32_t alarm_active_color=alarm_triggered?0xEF4444:
+            e.state=="disarmed"?0x3B82F6:0xF59E0B;
         for(const auto &button:card.alarm_buttons) {
           bool needed=alarm_needs_code(e,button.second);
           bool allowed=enabled && (!needed || e.code_format=="number");
           if(allowed) lv_obj_clear_state(button.first,LV_STATE_DISABLED);else lv_obj_add_state(button.first,LV_STATE_DISABLED);
+          const bool selected=alarm_available &&
+              ((button.second=="alarm_disarm" && e.state=="disarmed") ||
+               (button.second=="alarm_arm_home" && e.state=="armed_home") ||
+               (button.second=="alarm_arm_away" && e.state=="armed_away") ||
+               (button.second=="alarm_arm_night" && e.state=="armed_night") ||
+               (button.second=="alarm_arm_vacation" && e.state=="armed_vacation") ||
+               (button.second=="alarm_arm_custom_bypass" && e.state=="armed_custom_bypass"));
+          lv_obj_set_style_bg_color(button.first,
+              lv_color_hex(selected?0x365B62:0x233B53),0);
+          lv_obj_set_style_border_width(button.first,selected?2:0,0);
+          lv_obj_set_style_border_color(button.first,lv_color_hex(alarm_active_color),0);
+          if(lv_obj_get_child_cnt(button.first)>0)
+            lv_obj_set_style_text_color(lv_obj_get_child(button.first,0),
+                lv_color_hex(selected?0xFFFFFF:0xCBD5E1),0);
         }
+        lv_obj_set_style_text_color(card.status,
+            alarm_available?lv_color_hex(alarm_active_color):hmh_color(0x64748B),0);
         if(card.icon) lv_obj_set_style_text_color(card.icon,available(e)?lv_color_hex(e.state=="triggered"?0xEF4444:e.state=="disarmed"?0x3B82F6:0xF59E0B):hmh_color(0x64748B),0);
       }
       if(is_number(e)) {
