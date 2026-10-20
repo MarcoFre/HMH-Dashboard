@@ -1669,8 +1669,7 @@ class RoomDevices {
         const int requested_columns=(is_alarm || composite_purifier)?4:2;
         // Layout is driven by the content kind, not a fixed composite height.
         // Numerical values need a taller cell than status-only switches.
-        // Every metric tile must correspond to an explicitly labelled catalog entity.
-        // A switch attribute must never create an implicit power tile.
+        // Metric tiles are sourced exclusively from labelled catalog entities.
         const bool energy_composite=false;
         const int composite_count=composite_purifier?
             static_cast<int>(composite_block->items.size())-(uniform_composite?0:1):0;
