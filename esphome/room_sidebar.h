@@ -1882,7 +1882,13 @@ class RoomDevices {
             std::all_of(composite_block->items.begin(),composite_block->items.end(),
                 [](const Entity *item){return item->domain=="switch" || item->domain=="input_boolean";});
         const bool uniform_composite=sensor_only_composite || switch_only_composite;
-        const int requested_columns=(is_alarm || composite_purifier)?4:2;
+        // A grouped control with exactly one labelled metric needs only half
+        // the usual composite width. Keep full width for complex controls.
+        const bool compact_single_metric=composite_purifier &&
+            composite_block->items.size()==2 &&
+            (e.domain=="switch" || e.domain=="input_boolean") &&
+            !has_control;
+        const int requested_columns=is_alarm || (composite_purifier && !compact_single_metric)?4:2;
         // Layout is driven by the content kind, not a fixed composite height.
         // Numerical values need a taller cell than status-only switches.
         // Metric tiles are sourced exclusively from labelled catalog entities.
@@ -1890,7 +1896,8 @@ class RoomDevices {
         const int composite_count=composite_purifier?
             static_cast<int>(composite_block->items.size())-(uniform_composite?0:1):0;
         const bool all_switches=uniform_composite && switch_only_composite;
-        const int metric_cols=(composite_count==3 && (all_switches || energy_composite))?3:2;
+        const int metric_cols=compact_single_metric?1:
+            (composite_count==3 && (all_switches || energy_composite))?3:2;
         const int metric_rows=(composite_count+metric_cols-1)/metric_cols;
         const bool numeric_metrics=sensor_only_composite || energy_composite;
         const int metric_height=responsive.size(numeric_metrics?76:all_switches?60:68);
