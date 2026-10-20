@@ -296,6 +296,7 @@ class RoomDevices {
     std::vector<std::pair<lv_obj_t *,std::string>> alarm_buttons;
     std::string entity_id;
     bool uniform_composite = false;
+    bool energy_composite = false;
     int width = 0;
     lv_obj_t *minus = nullptr, *plus = nullptr, *mode = nullptr, *target = nullptr;
     float requested = NAN;
@@ -1712,6 +1713,7 @@ class RoomDevices {
         Card card;
         card.entity_id = e.id;
         card.uniform_composite = uniform_composite;
+        card.energy_composite = energy_metric;
         card.width = card_width;
         card.obj = lv_btn_create(list_);
         lv_obj_set_pos(card.obj,slot.x,slot.y);
@@ -2087,6 +2089,8 @@ class RoomDevices {
         if (e.domain == "light") {
           status = e.brightness_supported ?
               std::to_string(active ? (e.brightness * 100 + 127) / 255 : 0) + "%" : "";
+        } else if (card.energy_composite) {
+          status = e.state=="on"?"Acceso":e.state=="off"?"Spento":"Non disponibile";
         } else if ((e.domain == "switch" && !e.has_power) || e.domain == "input_boolean") {
           status.clear();
         }
@@ -2102,7 +2106,9 @@ class RoomDevices {
         const Entity *child=find(metric.first);
         if(!child) continue;
         std::string caption=status_text(*child);
-        if(child->domain=="switch" || child->domain=="light" || child->domain=="input_boolean") caption=child->state=="on"?"Acceso":"Spento";
+        if(!(card.energy_composite && metric.first==card.entity_id) &&
+           (child->domain=="switch" || child->domain=="light" || child->domain=="input_boolean"))
+          caption=child->state=="on"?"Acceso":"Spento";
         hmh_label_set_if_changed(metric.second,caption.c_str());
       }
       // Gaia 0.8.15: colour switch tiles according to live HA state.
@@ -2161,7 +2167,7 @@ class RoomDevices {
         lv_obj_set_style_text_color(card.status, hmh_color(0xEAF2FF), 0);
       } else if(e.domain=="switch" || e.domain=="input_boolean" || e.domain=="light" ||
                 e.domain=="fan" || e.domain=="cover" || e.domain=="climate") {
-        lv_obj_set_style_text_font(card.status, e.domain=="switch" && e.has_power ?
+        lv_obj_set_style_text_font(card.status, e.domain=="switch" && e.has_power && !card.energy_composite ?
             hmh_runtime_text_20 : hmh_runtime_text_16, 0);
       }
       if (e.domain == "sensor" && card.icon) {
