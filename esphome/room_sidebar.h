@@ -374,7 +374,7 @@ class RoomDevices {
   }
   bool dragging() const { return dragging_; }
   void cancel_drag() {
-    if (!dragging_) return;
+    if (!dragging_) {if(metric_dragging_) stop_metric_drag(false);return;}
     lv_timer_delete(drag_timer_); drag_timer_ = nullptr;
     lv_obj_delete(drag_ghost_); drag_ghost_ = nullptr;
     restore_preview();
@@ -596,6 +596,123 @@ class RoomDevices {
       lv_obj_set_pos(card->obj,place.x,place.y);
     }
     preview_target_=drop_entity_;preview_after_=drop_after_;
+  }
+  // Reorder subtiles with a lightweight outline; never reflow full LVGL widgets
+  // while the finger is down (the first live-reflow attempt caused WDT crashes).
+  bool metric_dragging_=false;
+  lv_obj_t *metric_ghost_=nullptr,*metric_target_outline_=nullptr;
+  lv_timer_t *metric_timer_=nullptr;
+  lv_indev_t *metric_input_=nullptr;
+  std::string metric_source_,metric_target_,metric_parent_;
+  bool metric_after_=false;
+  struct MetricHit { std::string id; lv_area_t bounds; };
+  std::vector<MetricHit> metric_hits_;
+  void stop_metric_drag(bool commit) {
+    if(!metric_dragging_) return;
+    if(metric_timer_) {lv_timer_delete(metric_timer_);metric_timer_=nullptr;}
+    if(metric_ghost_) {lv_obj_delete(metric_ghost_);metric_ghost_=nullptr;}
+    if(metric_target_outline_) {lv_obj_delete(metric_target_outline_);metric_target_outline_=nullptr;}
+    metric_dragging_=false;
+    hmh_navigation_blocked=false;
+    if(commit && !metric_source_.empty() && !metric_target_.empty() &&
+       metric_source_!=metric_target_) {
+      // Seed actual metric positions so the saved order follows the displayed order.
+      std::vector<std::string> ordered;
+      for(const auto &card:cards_) if(card.entity_id==metric_parent_) {
+        for(const auto &item:card.composite_targets) ordered.push_back(item.first);
+        break;
+      }
+      auto source=std::find(ordered.begin(),ordered.end(),metric_source_);
+      auto target=std::find(ordered.begin(),ordered.end(),metric_target_);
+      if(source!=ordered.end() && target!=ordered.end()) {
+        auto previous=hmh_widget_layout.entities;
+        auto &saved=hmh_widget_layout.entities;
+        for(const auto &id:ordered)
+          if(std::find(saved.begin(),saved.end(),id)==saved.end()) saved.push_back(id);
+        // Keep relative positions of unrelated devices unchanged.
+        saved.erase(std::remove(saved.begin(),saved.end(),metric_source_),saved.end());
+        auto where=std::find(saved.begin(),saved.end(),metric_target_);
+        if(where!=saved.end()) saved.insert(where+(metric_after_?1:0),metric_source_);
+        if(!hmh_widget_layout.save()) {
+          saved=std::move(previous);
+          lv_label_set_text(hint_,"Spazio impostazioni esaurito: modifica non salvata.");
+        }
+      }
+    }
+    metric_hits_.clear();metric_source_.clear();metric_target_.clear();metric_parent_.clear();
+    layout_dirty_=true;refresh(false);
+  }
+  void update_metric_drag() {
+    if(!metric_dragging_ || !metric_input_) return;
+    lv_point_t p;lv_indev_get_point(metric_input_,&p);
+    const int gw=static_cast<int>(lv_obj_get_width(metric_ghost_));
+    const int gh=static_cast<int>(lv_obj_get_height(metric_ghost_));
+    lv_obj_set_pos(metric_ghost_,std::clamp(static_cast<int>(p.x)-gw/2,0,std::max(0,800-gw)),
+                   std::clamp(static_cast<int>(p.y)-gh/2,0,std::max(0,480-gh)));
+    long best=0x7FFFFFFF;
+    for(const auto &hit:metric_hits_) {
+      const int cx=(hit.bounds.x1+hit.bounds.x2)/2,cy=(hit.bounds.y1+hit.bounds.y2)/2;
+      const long dx=static_cast<long>(p.x)-cx,dy=static_cast<long>(p.y)-cy;
+      const long score=dx*dx+dy*dy;
+      if(score<best) {
+        best=score;metric_target_=hit.id;metric_after_=
+            std::abs(dy)>std::abs(dx)?dy>0:dx>0;
+        lv_obj_set_pos(metric_target_outline_,hit.bounds.x1,hit.bounds.y1);
+        lv_obj_set_size(metric_target_outline_,
+            hit.bounds.x2-hit.bounds.x1+1,hit.bounds.y2-hit.bounds.y1+1);
+      }
+    }
+  }
+  void start_metric_drag(lv_obj_t *tile) {
+    if(metric_dragging_ || dragging_ || dialog_ || hmh_navigation_blocked) return;
+    const Card *owner=nullptr;
+    for(const auto &card:cards_) for(const auto &target:card.composite_targets)
+      if(target.second==tile) {owner=&card;metric_source_=target.first;break;}
+    if(!owner || owner->composite_targets.size()<2) return;
+    metric_input_=lv_indev_active();
+    if(!metric_input_) return;
+    metric_parent_=owner->entity_id;metric_target_=metric_source_;metric_after_=false;
+    metric_hits_.clear();
+    for(const auto &target:owner->composite_targets) {
+      lv_area_t bounds;lv_obj_get_coords(target.second,&bounds);
+      metric_hits_.push_back({target.first,bounds});
+    }
+    metric_dragging_=true;hmh_navigation_blocked=true;
+    lv_indev_wait_release(metric_input_);
+    metric_ghost_=lv_obj_create(lv_layer_top());
+    lv_obj_set_size(metric_ghost_,lv_obj_get_width(tile),lv_obj_get_height(tile));
+    lv_obj_set_style_pad_all(metric_ghost_,0,0);
+    lv_obj_set_style_radius(metric_ghost_,10,0);
+    lv_obj_set_style_bg_color(metric_ghost_,lv_color_hex(0x10273D),0);
+    lv_obj_set_style_bg_opa(metric_ghost_,LV_OPA_70,0);
+    lv_obj_set_style_border_width(metric_ghost_,2,0);
+    lv_obj_set_style_border_color(metric_ghost_,lv_color_hex(0x22D3EE),0);
+    lv_obj_clear_flag(metric_ghost_,LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(metric_ghost_,LV_OBJ_FLAG_SCROLLABLE);
+    const Entity *e=find(metric_source_);
+    auto *title=make_label(metric_ghost_,8,8,std::max(20,static_cast<int>(lv_obj_get_width(tile))-16),
+        e?e->name.c_str():"");
+    lv_obj_set_style_text_color(title,lv_color_hex(0xFFFFFF),0);
+    lv_label_set_long_mode(title,LV_LABEL_LONG_DOT);
+    metric_target_outline_=lv_obj_create(lv_layer_top());
+    lv_obj_set_style_radius(metric_target_outline_,10,0);
+    lv_obj_set_style_bg_opa(metric_target_outline_,LV_OPA_TRANSP,0);
+    lv_obj_set_style_border_width(metric_target_outline_,2,0);
+    lv_obj_set_style_border_color(metric_target_outline_,lv_color_hex(0x22D3EE),0);
+    lv_obj_clear_flag(metric_target_outline_,LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(metric_target_outline_,LV_OBJ_FLAG_SCROLLABLE);
+    metric_timer_=lv_timer_create([](lv_timer_t *t) {
+      auto *self=static_cast<RoomDevices *>(lv_timer_get_user_data(t));
+      if(lv_indev_get_state(self->metric_input_)==LV_INDEV_STATE_RELEASED) {
+        self->update_metric_drag();self->stop_metric_drag(true);
+      } else self->update_metric_drag();
+    },60,this);
+    update_metric_drag();
+  }
+  static void metric_drag_event(lv_event_t *event) {
+    auto *self=static_cast<RoomDevices *>(lv_event_get_user_data(event));
+    if(lv_event_get_code(event)!=LV_EVENT_LONG_PRESSED) return;
+    self->start_metric_drag(static_cast<lv_obj_t *>(lv_event_get_target(event)));
   }
   lv_timer_t *drag_timer_ = nullptr;
   lv_indev_t *drag_input_ = nullptr;
@@ -2085,6 +2202,7 @@ class RoomDevices {
                metric->domain=="fan" || metric->domain=="climate") {
               card.composite_controls.push_back({metric->id,tile});
             }
+            lv_obj_add_event_cb(tile,metric_drag_event,LV_EVENT_LONG_PRESSED,this);
             lv_obj_add_event_cb(tile,[](lv_event_t *event) {
               auto *self=static_cast<RoomDevices *>(lv_event_get_user_data(event));
               if(hmh_navigation_blocked) return;
