@@ -47,6 +47,23 @@ static int hmh_swipe_direction(int dx, int dy, bool allowed) {
 static std::string hmh_history_client="dashboard";
 static bool hmh_navigation_blocked = false;
 static bool hmh_status_busy = false;
+ // Lightweight dashboard workload indicator: peak measured handler cost.
+ // This tracks catalog/delta processing latency, not ESP32 CPU utilization.
+ static uint32_t hmh_work_peak_ms=0;
+ static uint32_t hmh_work_last_peak_ms=0;
+ static uint32_t hmh_work_last_at=0;
+ static void hmh_work_sample(uint32_t elapsed_ms) {
+   hmh_work_peak_ms=std::max(hmh_work_peak_ms,elapsed_ms);
+   hmh_work_last_at=millis();
+ }
+ static uint32_t hmh_work_read_peak() {
+   if(hmh_work_peak_ms) {
+     hmh_work_last_peak_ms=hmh_work_peak_ms;
+     hmh_work_peak_ms=0;
+   }
+   return millis()-hmh_work_last_at <= 3000U ? hmh_work_last_peak_ms : 0U;
+ }
+
 static bool hmh_raw_touch_enabled=false,hmh_raw_pressed=false;
 static uint32_t hmh_raw_sequence=0,hmh_raw_pressed_at=0;
 static lv_point_t hmh_raw_point{},hmh_raw_origin{};
@@ -434,6 +451,7 @@ class RoomDevices {
         payload_signature_ = signature;
         if (relevant) refresh(false);
         const uint32_t elapsed = millis() - perf_start;
+        hmh_work_sample(elapsed);
         if (elapsed >= 25) ESP_LOGW("hmh_perf", "Delta stati: %u ms", static_cast<unsigned>(elapsed));
         return;
       }
@@ -520,6 +538,7 @@ class RoomDevices {
     received_ = true;
     refresh(false);
     const uint32_t perf_total = millis() - perf_start;
+    hmh_work_sample(perf_total);
     if (perf_total >= 25) {
       ESP_LOGW("hmh_perf", "Catalogo: parsing=%u ms, vista=%u ms, totale=%u ms, entita=%u",
                static_cast<unsigned>(perf_parsed - perf_start),
