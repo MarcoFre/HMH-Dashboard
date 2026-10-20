@@ -1875,6 +1875,30 @@ class RoomDevices {
           } else ++n;
         }
       }
+      // Pair consecutive grouped devices whose primary is a simple switch
+      // with one labelled metric. Compute the column before creating LVGL
+      // objects; never relocate existing objects after the layout is built.
+      std::vector<std::pair<std::string,std::string>> device_pairs;
+      if(card_columns>=2) {
+        for(size_t n=0;n+1<device_blocks_.size();) {
+          const auto &a=device_blocks_[n], &b=device_blocks_[n+1];
+          auto compact=[&](const DeviceBlock &block)->bool {
+            if(!block.grouped || block.items.size()!=2 ||
+               block.items[0]->domain!="switch" &&
+               block.items[0]->domain!="input_boolean") return false;
+            if(hmh_widget_layout.device_closed(block.key) ||
+               (!categories && hmh_widget_layout.collapsed(area_,block.group))) return false;
+            return true;
+          };
+          if(a.group==b.group && compact(a) && compact(b)) {
+            device_pairs.push_back({a.key,b.key});
+            n+=2;
+          } else ++n;
+        }
+      }
+      int device_pair_pending_bottom=0,device_pair_start_y=0;
+      bool device_pair_left=false,device_pair_right=false;
+      std::string device_pair_next;
       const int paired_half_width=(inner_width-gap)/2;
       const int paired_right_x=paired_half_width+gap;
       int paired_pending_group=-1,paired_origin_y=0,paired_first_bottom=0;
@@ -1927,14 +1951,37 @@ class RoomDevices {
         if (!categories && hmh_widget_layout.collapsed(area_, group)) continue;
         const auto key=block_key(e);
         if(key!=previous_device) {
-          if(key[0]!='@' || (!previous_device.empty() && previous_device[0]!='@')) {layout_y=tile_grid.bottom();tile_grid.reset(layout_y);}
+          const bool paired_right=key==device_pair_next;
+          if(paired_right) {
+            device_pair_pending_bottom=tile_grid.bottom();
+            layout_y=device_pair_start_y;
+          } else {
+            layout_y=device_pair_right?
+                std::max(device_pair_pending_bottom,tile_grid.bottom()):tile_grid.bottom();
+          }
+          device_pair_right=paired_right;
+          device_pair_left=false;
+          device_pair_next.clear();
+          for(const auto &pair:device_pairs) if(pair.first==key) {
+            device_pair_left=true;device_pair_next=pair.second;device_pair_start_y=layout_y;
+            break;
+          }
+          if(device_pair_left || paired_right)
+            tile_grid=HmhTileGrid(paired_half_width,2,responsive.size(40),gap);
+          else
+            tile_grid=HmhTileGrid(
+                category_x_offset?paired_half_width:inner_width,
+                category_x_offset?2:tile_columns,responsive.size(40),gap);
+          tile_grid.reset(layout_y);
           previous_device=key;
           if(key[0]!='@') {
             size_t count=0;for(const auto &block:device_blocks_) if(block.key==key) count=block.items.size();
             std::string caption=std::string(hmh_widget_layout.device_closed(key)?"+ ":"- ")+
               (e.device_name.empty()?e.device:e.device_name)+" · "+std::to_string(count);
             if(categories && area_name) caption+=" · "+area_name(e.area);
-            auto *heading=make_label(list_,12,layout_y,layout_width_-30,caption.c_str());
+            const int device_x=category_x_offset+(paired_right?paired_right_x:0);
+            auto *heading=make_label(list_,12+device_x,layout_y,
+                device_pair_left || paired_right ? paired_half_width-24:layout_width_-30,caption.c_str());
             lv_obj_set_style_text_font(heading,hmh_runtime_text_20,0);
             lv_obj_set_style_text_color(heading,hmh_color(0xCBD5E1),0);
             lv_obj_set_height(heading,25);
@@ -2018,7 +2065,7 @@ class RoomDevices {
         card.energy_composite = energy_composite;
         card.width = card_width;
         card.obj = lv_btn_create(list_);
-        lv_obj_set_pos(card.obj,slot.x+category_x_offset,slot.y);
+        lv_obj_set_pos(card.obj,slot.x+category_x_offset+(device_pair_right?paired_right_x:0),slot.y);
         lv_obj_set_size(card.obj,card_width,card_height);
         lv_obj_set_style_radius(card.obj, 16, 0);
         lv_obj_set_style_pad_all(card.obj, 0, 0);
