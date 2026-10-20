@@ -798,11 +798,18 @@ class RoomDevices {
       lv_obj_set_width(drag_ghost_,std::max(180,layout_width_-20));
       lv_obj_set_height(drag_ghost_,52);
     }
-    auto *caption = make_label(drag_ghost_, 0, 0,
-        std::max(30,static_cast<int>(lv_obj_get_width(drag_ghost_))-18),
-        drag_title.c_str());
+    // The ghost is a plain absolute-position container: leave real space for
+    // its label instead of relying on LVGL's default inner padding.
+    lv_obj_set_style_pad_all(drag_ghost_,0,0);
+    const int ghost_width=static_cast<int>(lv_obj_get_width(drag_ghost_));
+    const int ghost_height=static_cast<int>(lv_obj_get_height(drag_ghost_));
+    auto *caption = make_label(drag_ghost_, 12, 0,
+        std::max(30,ghost_width-24),drag_title.c_str());
     lv_obj_set_style_text_font(caption,hmh_runtime_text_20,0);
     lv_label_set_long_mode(caption,LV_LABEL_LONG_DOT);
+    lv_obj_set_height(caption,std::max(20,ghost_height-12));
+    lv_obj_set_y(caption,6);
+    lv_obj_set_style_text_align(caption,LV_TEXT_ALIGN_LEFT,0);
     lv_obj_set_style_text_color(caption, lv_color_hex(0xFFFFFF), 0);
     drop_marker_ = lv_obj_create(list_);
     lv_obj_set_size(drop_marker_, (drag_category_ || !drag_device_.empty()) ? layout_width_ - 20 : (layout_width_ - 26) / 2, 4);
