@@ -690,7 +690,7 @@ class RoomDevices {
   void update_drag() {
     lv_point_t point; lv_indev_get_point(drag_input_, &point);
     lv_obj_set_pos(drag_ghost_,
-        std::clamp(static_cast<int>(point.x)-lv_obj_get_width(drag_ghost_)/2,0,
+        std::clamp(static_cast<int>(point.x)-static_cast<int>(lv_obj_get_width(drag_ghost_))/2,0,
           std::max(0,800-static_cast<int>(lv_obj_get_width(drag_ghost_)))),
         std::clamp(static_cast<int>(point.y)-44,0,428));
     lv_area_t bounds; lv_obj_get_coords(list_, &bounds);
