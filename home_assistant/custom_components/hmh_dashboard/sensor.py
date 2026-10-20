@@ -344,7 +344,7 @@ class DashboardCatalog(SensorEntity):
                 "condition": WEATHER_CONDITIONS.get(state.state, state.state) if domain == "weather" and state else "",
                 "glyph": chr(int(self._icons.get(WEATHER_ICONS.get(state.state, "mdi:weather-cloudy"), self._icons["mdi:home-outline"]), 16)) if domain == "weather" and state else "",
                 "device_name": (device.name_by_user or device.name or entry.device_id) if device else "",
-                "name": attrs.get("friendly_name") or entry.name or entry.original_name or entry.entity_id,
+                "name": entry.name or attrs.get("friendly_name") or entry.original_name or entry.entity_id,
                 "state": state.state if state is not None else "unavailable",
                 "device_class": device_class,
                 "unit": climate_unit if domain in {"climate", "weather"} else unit,
