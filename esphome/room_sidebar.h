@@ -550,52 +550,98 @@ class RoomDevices {
   int drag_group_ = -1, drop_group_ = -1, pending_group_ = -1;
   std::string drag_entity_, drop_entity_;
   lv_obj_t *drag_ghost_ = nullptr, *drop_marker_ = nullptr;
-  std::vector<std::pair<lv_obj_t *,lv_point_t>> preview_original_;
+  struct PreviewSlot {
+    std::string id;
+    lv_obj_t *original=nullptr,*proxy=nullptr;
+    lv_area_t initial{};
+    int x=0,y=0,w=0,h=0;
+  };
+  std::vector<PreviewSlot> preview_slots_;
   std::string preview_target_;
   bool preview_after_=false;
+  int preview_scroll_=0;
   void restore_preview() {
-    for(const auto &entry:preview_original_)
-      lv_obj_set_pos(entry.first,entry.second.x,entry.second.y);
-    preview_original_.clear();preview_target_.clear();
+    for(auto &slot:preview_slots_) {
+      if(slot.original) lv_obj_clear_flag(slot.original,LV_OBJ_FLAG_HIDDEN);
+      if(slot.proxy) lv_obj_delete(slot.proxy);
+    }
+    preview_slots_.clear();
+    preview_target_.clear();
+  }
+  void build_preview() {
+    if(drag_category_ || !drag_device_.empty() || drag_entity_.empty()) return;
+    const Entity *source=find(drag_entity_);
+    if(!source || block_key(*source)[0]!='@') return; // grouped devices retain proven drag logic
+    for(auto &card:cards_) {
+      const Entity *item=find(card.entity_id);
+      if(!item || section(*item)!=drag_group_ || block_key(*item)[0]!='@') continue;
+      PreviewSlot slot;
+      slot.id=card.entity_id;slot.original=card.obj;
+      slot.x=lv_obj_get_x(card.obj);slot.y=lv_obj_get_y(card.obj);
+      slot.w=lv_obj_get_width(card.obj);slot.h=lv_obj_get_height(card.obj);
+      lv_obj_get_coords(card.obj,&slot.initial);
+      preview_slots_.push_back(slot);
+    }
+    if(preview_slots_.size()<2) {preview_slots_.clear();return;}
+    std::sort(preview_slots_.begin(),preview_slots_.end(),[](const PreviewSlot &a,const PreviewSlot &b){
+      return a.y==b.y?a.x<b.x:a.y<b.y;
+    });
+    // These proxy rectangles are cheap to repaint; full widget subtrees stay untouched.
+    for(auto &slot:preview_slots_) {
+      slot.proxy=lv_obj_create(list_);
+      lv_obj_set_pos(slot.proxy,slot.x,slot.y);
+      lv_obj_set_size(slot.proxy,slot.w,slot.h);
+      lv_obj_set_style_pad_all(slot.proxy,0,0);
+      lv_obj_set_style_radius(slot.proxy,12,0);
+      lv_obj_set_style_bg_color(slot.proxy,lv_color_hex(0x16334A),0);
+      lv_obj_set_style_bg_opa(slot.proxy,LV_OPA_COVER,0);
+      lv_obj_set_style_border_width(slot.proxy,1,0);
+      lv_obj_set_style_border_color(slot.proxy,lv_color_hex(0x45738A),0);
+      lv_obj_clear_flag(slot.proxy,LV_OBJ_FLAG_CLICKABLE);
+      lv_obj_clear_flag(slot.proxy,LV_OBJ_FLAG_SCROLLABLE);
+      const Entity *item=find(slot.id);
+      auto *title=make_label(slot.proxy,12,10,std::max(16,slot.w-24),
+          item?item->name.c_str():"");
+      lv_obj_set_style_text_font(title,hmh_chip_text_14,0);
+      lv_obj_set_style_text_color(title,lv_color_hex(0xCBD5E1),0);
+      lv_label_set_long_mode(title,LV_LABEL_LONG_DOT);
+      lv_obj_add_flag(slot.original,LV_OBJ_FLAG_HIDDEN);
+    }
+    preview_scroll_=lv_obj_get_scroll_y(list_);
   }
   void preview_reflow() {
-    if(drag_category_ || !drag_device_.empty() || drag_entity_.empty() || drop_entity_.empty()) return;
+    if(preview_slots_.empty() || drop_entity_.empty()) return;
     if(preview_target_==drop_entity_ && preview_after_==drop_after_) return;
-    restore_preview();
-    std::vector<Card *> ordered;
-    for(auto &card:cards_) {
-      auto *e=find(card.entity_id);
-      if(e && section(*e)==drag_group_) ordered.push_back(&card);
-    }
-    auto source=std::find_if(ordered.begin(),ordered.end(),[&](const Card *card){return card->entity_id==drag_entity_;});
-    auto target=std::find_if(ordered.begin(),ordered.end(),[&](const Card *card){return card->entity_id==drop_entity_;});
-    if(source==ordered.end() || target==ordered.end() || ordered.size()<2) return;
-    // Preserve the actual current positions for a reversible, commit-free preview.
-    std::sort(ordered.begin(),ordered.end(),[](const Card *a,const Card *b){
-      const int ay=lv_obj_get_y(a->obj),by=lv_obj_get_y(b->obj);
-      return ay==by?lv_obj_get_x(a->obj)<lv_obj_get_x(b->obj):ay<by;
-    });
-    const int y0=lv_obj_get_y(ordered.front()->obj);
-    for(auto *card:ordered)
-      preview_original_.push_back({card->obj,{static_cast<lv_coord_t>(lv_obj_get_x(card->obj)),static_cast<lv_coord_t>(lv_obj_get_y(card->obj))}});
-    auto it=std::find_if(ordered.begin(),ordered.end(),[&](const Card *card){return card->entity_id==drag_entity_;});
-    Card *moving=*it;ordered.erase(it);
-    auto dest=std::find_if(ordered.begin(),ordered.end(),[&](const Card *card){return card->entity_id==drop_entity_;});
-    if(dest!=ordered.end() && drop_after_) ++dest;
-    ordered.insert(dest,moving);
-    const HmhLayout layout=HmhLayout::current();
-    const int gap=layout.size(8),inner_width=std::max(1,layout_width_-layout.size(14));
-    const int cols=std::clamp((inner_width+gap)/(layout.size(255)+gap),1,3)*2;
-    const int tile_height=layout.size(40);
+    const HmhLayout responsive=HmhLayout::current();
+    const int gap=responsive.size(8);
+    const int inner_width=std::max(1,layout_width_-responsive.size(14));
+    const int cols=std::clamp((inner_width+gap)/(responsive.size(255)+gap),1,3)*2;
+    const int ch=responsive.size(40);
     const int cw=std::max(1,(inner_width-(cols-1)*gap)/cols);
-    HmhTileGrid grid(inner_width,cols,tile_height,gap);grid.reset(y0);
-    for(auto *card:ordered) {
-      const int w=lv_obj_get_width(card->obj),h=lv_obj_get_height(card->obj);
-      auto place=grid.place(std::clamp((w+gap)/(cw+gap),1,cols),
-                           std::max(1,(h+gap)/(tile_height+gap)));
-      lv_obj_set_pos(card->obj,place.x,place.y);
+    HmhTileGrid grid(inner_width,cols,ch,gap);
+    grid.reset(preview_slots_.front().y);
+    std::vector<PreviewSlot *> order;
+    PreviewSlot *source=nullptr;
+    for(auto &slot:preview_slots_) {
+      if(slot.id==drag_entity_) source=&slot;
+      else order.push_back(&slot);
     }
-    preview_target_=drop_entity_;preview_after_=drop_after_;
+    if(!source) return;
+    auto dest=std::find_if(order.begin(),order.end(),[&](const PreviewSlot *slot){return slot->id==drop_entity_;});
+    if(dest==order.end()) return;
+    if(drop_after_) ++dest;
+    order.insert(dest,source);
+    for(auto *slot:order) {
+      auto place=grid.place(std::clamp((slot->w+gap)/(cw+gap),1,cols),
+                            std::max(1,(slot->h+gap)/(ch+gap)));
+      // The source's slot is the empty space into which the cyan ghost drops.
+      lv_obj_set_pos(slot->proxy,place.x,place.y);
+      lv_obj_set_style_border_color(slot->proxy,
+          lv_color_hex(slot==source?0x22D3EE:0x45738A),0);
+      lv_obj_set_style_border_width(slot->proxy,slot==source?2:1,0);
+    }
+    preview_target_=drop_entity_;
+    preview_after_=drop_after_;
   }
   lv_timer_t *drag_timer_ = nullptr;
   lv_indev_t *drag_input_ = nullptr;
@@ -685,6 +731,7 @@ class RoomDevices {
       if (lv_indev_get_state(self->drag_input_) == LV_INDEV_STATE_RELEASED) { self->update_drag(); self->finish_drag(); }
       else self->update_drag();
     }, 60, this);
+    build_preview();
     update_drag();
   }
   void update_drag() {
@@ -727,6 +774,13 @@ class RoomDevices {
         auto source_key=block_key(*source),target_key=block_key(*e);
         if(source_key[0]!='@' || target_key[0]!='@') { if(source_key!=target_key) continue; }
         lv_area_t r; lv_obj_get_coords(card.obj, &r);
+        // Frozen hit boxes avoid feedback from the shifting visual preview.
+        for(const auto &slot:preview_slots_) if(slot.id==e->id) {
+          r=slot.initial;
+          const int scroll_delta=lv_obj_get_scroll_y(list_)-preview_scroll_;
+          r.y1-=scroll_delta;r.y2-=scroll_delta;
+          break;
+        }
         long dx = point.x - (r.x1 + r.x2) / 2, dy = point.y - (r.y1 + r.y2) / 2;
         long distance = dx * dx + dy * dy;
         if (distance < best) {
@@ -738,7 +792,10 @@ class RoomDevices {
     // Stability fallback: do not move live LVGL card trees in the touch timer.
     // Keep the cyan drag ghost; use a light slot marker until an offline
     // preview layout can be validated on the target hardware.
-    if(nearest) {
+    if(nearest && !preview_slots_.empty()) {
+      preview_reflow();
+      lv_obj_add_flag(drop_marker_,LV_OBJ_FLAG_HIDDEN);
+    } else if(nearest) {
       lv_obj_clear_flag(drop_marker_,LV_OBJ_FLAG_HIDDEN);
       int marker_y=lv_obj_get_y(nearest)+(drop_after_?lv_obj_get_height(nearest):-4);
       if(!drag_device_.empty() && drop_after_) {
