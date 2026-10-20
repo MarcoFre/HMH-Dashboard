@@ -1690,8 +1690,12 @@ class RoomDevices {
             (e.domain=="switch" || e.domain=="input_boolean" ||
              e.domain=="light" || e.domain=="fan") &&
             !e.purifier;
+        // Purifier header and speed control need less vertical space than
+        // other multi-control hero cards. Reserve 8px below the speed bar.
+        const bool purifier_composite=composite_purifier && e.purifier && e.domain=="fan";
         const int metrics_top=uniform_composite?responsive.size(12):
-            compact_header?responsive.size(76):responsive.size(145);
+            compact_header?responsive.size(76):
+            purifier_composite?responsive.size(112):responsive.size(145);
         const int metrics_bottom=metrics_top+metric_rows*metric_height+
             std::max(0,metric_rows-1)*responsive.size(8);
         // Slider has to sit below the metrics, not overlap or leave a blank band.
@@ -1918,10 +1922,14 @@ class RoomDevices {
           card.pm25_label=make_label(card.obj,12,categories?80:68,card_width-24,"");
           lv_obj_set_height(card.pm25_label,20);
           if(composite_purifier) lv_obj_add_flag(card.pm25_label,LV_OBJ_FLAG_HIDDEN);
-          if(card.slider) {lv_obj_set_y(card.slider,composite_purifier?responsive.size(100):(categories?103:90));lv_obj_set_height(card.slider,composite_purifier?responsive.size(30):(categories?18:30));}
+          const int speed_y=purifier_composite?responsive.size(74):
+              composite_purifier?responsive.size(100):(categories?103:90);
+          const int speed_h=purifier_composite?responsive.size(30):
+              composite_purifier?responsive.size(30):(categories?18:30);
+          if(card.slider) {lv_obj_set_y(card.slider,speed_y);lv_obj_set_height(card.slider,speed_h);}
           else {
-            card.speed_bar=lv_bar_create(card.obj);lv_obj_set_pos(card.speed_bar,12,composite_purifier?responsive.size(100):(categories?103:90));
-            lv_obj_set_size(card.speed_bar,card_width-24,composite_purifier?responsive.size(30):(categories?18:30));lv_bar_set_range(card.speed_bar,0,100);
+            card.speed_bar=lv_bar_create(card.obj);lv_obj_set_pos(card.speed_bar,12,speed_y);
+            lv_obj_set_size(card.speed_bar,card_width-24,speed_h);lv_bar_set_range(card.speed_bar,0,100);
             lv_obj_clear_flag(card.speed_bar,LV_OBJ_FLAG_CLICKABLE);
           }
           auto *bar=card.slider?card.slider:card.speed_bar;
