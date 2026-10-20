@@ -2195,6 +2195,18 @@ class RoomDevices {
       }
       if (e.domain == "binary_sensor" && card.icon)
         hmh_label_set_if_changed(card.icon, binary_icon(e));
+      // The primary control has the same active-state language as nested tiles.
+      // Status-only and numerical sensor cards keep their existing appearance.
+      if(card.icon_tile &&
+         (e.domain=="switch" || e.domain=="input_boolean" ||
+          e.domain=="light" || e.domain=="fan" || e.domain=="climate" ||
+          e.domain=="cover")) {
+        const bool highlighted=available(e) && active;
+        lv_obj_set_style_bg_color(card.icon_tile,
+            lv_color_hex(highlighted?0x24563D:0x254560),0);
+        lv_obj_set_style_border_width(card.icon_tile,highlighted?2:0,0);
+        lv_obj_set_style_border_color(card.icon_tile,lv_color_hex(0x34D399),0);
+      }
       const lv_color_t icon_color = available(e) && active ?
           hmh_color(0xFBBF24) : hmh_color(0x64748B);
       if (card.icon) lv_obj_set_style_text_color(card.icon,
