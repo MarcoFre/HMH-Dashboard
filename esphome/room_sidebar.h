@@ -475,7 +475,13 @@ class RoomDevices {
     received_ = true;
     refresh(false);
     const uint32_t perf_total = millis() - perf_start;
-    if (perf_total >= 25) ESP_LOGW("hmh_perf", "Catalogo: parsing=%u ms, vista=%u ms, totale=%u ms, entita=%u",\n      static_cast<unsigned>(perf_parsed-perf_start),\n      static_cast<unsigned>(millis()-perf_parsed), static_cast<unsigned>(perf_total),\n      static_cast<unsigned>(entities_.size()));
+    if (perf_total >= 25) {
+      ESP_LOGW("hmh_perf", "Catalogo: parsing=%u ms, vista=%u ms, totale=%u ms, entita=%u",
+               static_cast<unsigned>(perf_parsed - perf_start),
+               static_cast<unsigned>(millis() - perf_parsed),
+               static_cast<unsigned>(perf_total),
+               static_cast<unsigned>(entities_.size()));
+    }
   }
 
  private:
