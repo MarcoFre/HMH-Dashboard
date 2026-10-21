@@ -3796,6 +3796,12 @@ class HmhNavigation {
     auto *self = static_cast<HmhNavigation *>(lv_event_get_user_data(event));
     auto *input = static_cast<lv_indev_t *>(lv_event_get_current_target(event));
     const auto code = lv_event_get_code(event);
+    // Stop click events after horizontal finger movement.
+    if(hmh_touch_is_horizontal_motion() &&
+       (code==LV_EVENT_CLICKED || code==LV_EVENT_SHORT_CLICKED)) {
+      lv_indev_stop_processing(input);
+      return;
+    }
     if (hmh_status_busy) {
       if (code == LV_EVENT_PRESSED) lv_indev_wait_release(input);
       lv_indev_stop_processing(input);
