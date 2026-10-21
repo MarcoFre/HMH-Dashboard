@@ -67,11 +67,23 @@ static bool hmh_status_busy = false;
 static bool hmh_raw_touch_enabled=false,hmh_raw_pressed=false;
 static uint32_t hmh_raw_sequence=0,hmh_raw_pressed_at=0;
 static lv_point_t hmh_raw_point{},hmh_raw_origin{};
+static bool hmh_raw_horizontal_motion=false;
+// Flag a horizontal navigation attempt before it becomes a full page swipe.
+// This prevents accidental switch/button clicks on a slow or short swipe.
+static bool hmh_touch_is_horizontal_motion() {
+  return hmh_raw_touch_enabled && hmh_raw_horizontal_motion;
+}
 static void hmh_touch_start(int x,int y) {
   hmh_raw_touch_enabled=true;hmh_raw_pressed=true;++hmh_raw_sequence;
-  hmh_raw_point.x=x;hmh_raw_point.y=y;hmh_raw_origin=hmh_raw_point;hmh_raw_pressed_at=lv_tick_get();
+  hmh_raw_point.x=x;hmh_raw_point.y=y;hmh_raw_origin=hmh_raw_point;
+  hmh_raw_horizontal_motion=false;hmh_raw_pressed_at=lv_tick_get();
 }
-static void hmh_touch_update(int x,int y) {hmh_raw_point.x=x;hmh_raw_point.y=y;}
+static void hmh_touch_update(int x,int y) {
+  hmh_raw_point.x=x;hmh_raw_point.y=y;
+  const int dx=x-hmh_raw_origin.x,dy=y-hmh_raw_origin.y;
+  if(std::abs(dx)>=22 && std::abs(dx)>std::abs(dy)*3/2)
+    hmh_raw_horizontal_motion=true;
+}
 static void hmh_touch_end() {hmh_raw_pressed=false;}
 static void hmh_check_glyphs(const lv_font_t *font,const char *text) {
   const auto *p=reinterpret_cast<const unsigned char *>(text);
@@ -755,7 +767,8 @@ class RoomDevices {
         return;
       }
     }
-    if (code != LV_EVENT_CLICKED || self->dragging_ || hmh_navigation_blocked) return;
+    if (code != LV_EVENT_CLICKED || self->dragging_ || hmh_navigation_blocked ||
+        hmh_touch_is_horizontal_motion()) return;
     for(const auto &card:self->cards_) if(card.name==target || card.icon_tile==target) {
       const auto *e=self->find(card.entity_id);if(e && e->domain=="sensor") {self->open_history(*e);return;}
     }
@@ -1543,7 +1556,7 @@ class RoomDevices {
     return nullptr;
   }
   void command(lv_obj_t *target) {
-    if (hmh_navigation_blocked) return;
+    if (hmh_navigation_blocked || hmh_touch_is_horizontal_motion()) return;
     if (!online_) return;
     for (const auto &card : cards_) {
       if (card.obj != target) continue;
@@ -2401,7 +2414,7 @@ class RoomDevices {
             lv_obj_add_event_cb(tile,metric_drag_event,LV_EVENT_LONG_PRESSED,this);
             lv_obj_add_event_cb(tile,[](lv_event_t *event) {
               auto *self=static_cast<RoomDevices *>(lv_event_get_user_data(event));
-              if(hmh_navigation_blocked) return;
+              if(hmh_navigation_blocked || hmh_touch_is_horizontal_motion()) return;
               lv_obj_t *target=static_cast<lv_obj_t *>(lv_event_get_target(event));
               for(const auto &card:self->cards_) for(const auto &item:card.composite_targets) {
                 if(item.second!=target) continue;
@@ -3783,6 +3796,12 @@ class HmhNavigation {
     auto *self = static_cast<HmhNavigation *>(lv_event_get_user_data(event));
     auto *input = static_cast<lv_indev_t *>(lv_event_get_current_target(event));
     const auto code = lv_event_get_code(event);
+    // Stop click events after horizontal finger movement.
+    if(hmh_touch_is_horizontal_motion() &&
+       (code==LV_EVENT_CLICKED || code==LV_EVENT_SHORT_CLICKED)) {
+      lv_indev_stop_processing(input);
+      return;
+    }
     if (hmh_status_busy) {
       if (code == LV_EVENT_PRESSED) lv_indev_wait_release(input);
       lv_indev_stop_processing(input);
@@ -3833,8 +3852,9 @@ class HmhNavigation {
           room_sidebar.set_page(nav->next_page_);nav->show_page_dots();
         }, self);
       }
-    } else if (hmh_navigation_blocked && (code == LV_EVENT_CLICKED || code == LV_EVENT_SHORT_CLICKED ||
-               code == LV_EVENT_LONG_PRESSED || code == LV_EVENT_LONG_PRESSED_REPEAT)) {
+    } else if ((hmh_navigation_blocked || hmh_touch_is_horizontal_motion()) &&
+               (code == LV_EVENT_CLICKED || code == LV_EVENT_SHORT_CLICKED ||
+                code == LV_EVENT_LONG_PRESSED || code == LV_EVENT_LONG_PRESSED_REPEAT)) {
       lv_indev_stop_processing(input);
     }
   }
