@@ -784,11 +784,11 @@ class RoomDevices {
     lv_obj_clear_flag(drag_ghost_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_clear_flag(drag_ghost_, LV_OBJ_FLAG_SCROLLABLE);
     const Entity *e = find(entity);
-    const char *category_names[]={"Luci","Interruttori","Termostati","Sensori",
+    const char *category_names[]={"Luci","Interruttori","Termostati","Altri sensori",
         "Aperture","Energia","Pulsanti","Ventilatori","Porte e finestre",
-        "Purificatori","Allarme"};
+        "Purificatori","Allarme","Temperatura","Umidità","Qualità aria","Ambiente","Altri sensori"};
     std::string drag_title=e?e->name:
-        drag_category_ && group>=0 && group<11?std::string(category_names[group]):
+        drag_category_ && group>=0 && group<16?std::string(category_names[group]):
         device.empty()?"Sposta categoria":"Sposta dispositivo";
     if(drag_category_ || !device.empty()) {
       lv_obj_set_width(drag_ghost_,std::max(180,layout_width_-20));
@@ -1390,8 +1390,23 @@ class RoomDevices {
   }
   static bool tall_card(const Entity &e) {return !is_contact(e) && (e.domain=="sensor" || e.domain=="binary_sensor" || e.domain=="light" || e.domain=="climate" || e.domain=="cover" || e.domain=="fan" || is_number(e));}
   static bool is_contact(const Entity &e) {return e.domain=="binary_sensor" && (e.device_class=="door" || e.device_class=="window" || e.device_class=="opening" || e.device_class=="garage_door");}
+  static int sensor_section(const Entity &e) {
+    const std::string &dc=e.device_class;
+    if(dc=="power" || dc=="energy" || dc=="voltage" || dc=="current" ||
+       dc=="apparent_power" || dc=="reactive_power" || dc=="power_factor") return 5;
+    if(dc=="temperature") return 11;
+    if(dc=="humidity" || dc=="moisture") return 12;
+    if(dc=="carbon_dioxide" || dc=="carbon_monoxide" || dc=="pm1" ||
+       dc=="pm10" || dc=="pm25" || dc=="volatile_organic_compounds" ||
+       dc=="volatile_organic_compounds_parts" || dc=="aqi" ||
+       dc=="nitrogen_dioxide" || dc=="ozone") return 13;
+    if(dc=="atmospheric_pressure" || dc=="pressure" || dc=="illuminance" ||
+       dc=="wind_speed" || dc=="speed" || dc=="precipitation" ||
+       dc=="precipitation_intensity" || dc=="distance" || dc=="uv_index") return 14;
+    return 15;
+  }
   static int section(const Entity &e) {
-    if(e.group_section>=0 && e.group_section<=10) return e.group_section;
+    if(e.group_section>=0 && e.group_section<=15) return e.group_section;
     if(e.domain=="alarm_control_panel") return 10;
     if(is_number(e)) return 3;
     if (e.domain == "binary_sensor" && (e.device_class == "door" || e.device_class == "window" ||
@@ -1400,8 +1415,8 @@ class RoomDevices {
     if (e.domain == "light") return 0;
     if (e.domain == "switch" || e.domain == "input_boolean") return 1;
     if (e.domain == "climate") return 2;
-    if (e.domain == "sensor" && (e.device_class == "power" || e.device_class == "energy")) return 5;
-    if (e.domain == "binary_sensor" || e.domain == "sensor") return 3;
+    if (e.domain == "sensor") return sensor_section(e);
+    if (e.domain == "binary_sensor") return 15;
     if (e.domain == "cover") return 4;
     return 6;
   }
@@ -1910,7 +1925,7 @@ class RoomDevices {
           else
             tile_grid=HmhTileGrid(inner_width,tile_columns,responsive.size(40),gap);
           tile_grid.reset(layout_y);
-          const char *title = group == 0 ? "LUCI" : group == 1 ? "INTERRUTTORI" : group == 2 ? "TERMOSTATI" : group == 3 ? "SENSORI" : group == 4 ? "APERTURE" : group == 5 ? "ENERGIA" : group == 7 ? "VENTILATORI" : group == 10 ? "ALLARME" : group == 9 ? "PURIFICATORI" : group == 8 ? "PORTE E FINESTRE" : "PULSANTI";
+          const char *title = group == 0 ? "LUCI" : group == 1 ? "INTERRUTTORI" : group == 2 ? "TERMOSTATI" : group == 3 ? "ALTRI SENSORI" : group == 4 ? "APERTURE" : group == 5 ? "ENERGIA" : group == 7 ? "VENTILATORI" : group == 10 ? "ALLARME" : group == 9 ? "PURIFICATORI" : group == 8 ? "PORTE E FINESTRE" : group == 11 ? "TEMPERATURA" : group == 12 ? "UMIDITÀ" : group == 13 ? "QUALITÀ ARIA" : group == 14 ? "AMBIENTE" : group == 15 ? "ALTRI SENSORI" : "PULSANTI";
           size_t count = 0; for (const auto *item : all_selected) if (section(*item) == group) ++count;
           std::string caption = std::string(categories ? "" : "- ") + title + " · " + std::to_string(count);
           auto *heading = make_label(list_, 2+category_x_offset, layout_y,
@@ -3053,9 +3068,9 @@ class RoomSidebar {
       for(const auto &room:all_rooms_) if(std::find(battery_areas_.begin(),battery_areas_.end(),room.id)!=battery_areas_.end())
         rooms_.push_back({"@battery:"+room.id,room.name,nullptr,room.glyph});
     } else if (categories_) {
-      static const char *names[] = {"Luci", "Interruttori", "Termostati", "Sensori", "Aperture", "Energia", "Pulsanti", "Ventilatori", "Porte e finestre", "Purificatori", "Allarme"};
-      static const char *icons[] = {"\xF3\xB0\x8C\xB5", "\xF3\xB0\x90\xA5", "\xF3\xB0\x94\x8F", "\xF3\xB0\x8A\x9A", "\xF3\xB0\x84\x9A", "\xF3\xB0\x89\x81", "\xF3\xB0\x85\x9D", "\xF3\xB0\x88\x90", "\xF3\xB0\xA0\x9B", "\xF3\xB0\xB5\x84", "\xF3\xB0\x92\x98"};
-      for (int i = 0; i < 11; ++i) if (category_mask_ & (1u << i))
+      static const char *names[] = {"Luci", "Interruttori", "Termostati", "Altri sensori", "Aperture", "Energia", "Pulsanti", "Ventilatori", "Porte e finestre", "Purificatori", "Allarme", "Temperatura", "Umidità", "Qualità aria", "Ambiente", "Altri sensori"};
+      static const char *icons[] = {"\xF3\xB0\x8C\xB5", "\xF3\xB0\x90\xA5", "\xF3\xB0\x94\x8F", "\xF3\xB0\x8A\x9A", "\xF3\xB0\x84\x9A", "\xF3\xB0\x89\x81", "\xF3\xB0\x85\x9D", "\xF3\xB0\x88\x90", "\xF3\xB0\xA0\x9B", "\xF3\xB0\xB5\x84", "\xF3\xB0\x92\x98", "\xF3\xB0\x94\x8F", "\xF3\xB0\x96\x8E", "\xF3\xB0\xB5\x83", "\xF3\xB0\x83\x9E", "\xF3\xB0\x8A\x9A"};
+      for (int i = 0; i < 16; ++i) if (category_mask_ & (1u << i))
         rooms_.push_back({"@category:" + std::to_string(i), names[i], nullptr, icons[i]});
     } else {
       for (const auto &room : all_rooms_) if (room.enabled) rooms_.push_back(room);

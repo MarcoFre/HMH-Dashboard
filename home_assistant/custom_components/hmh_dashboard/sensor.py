@@ -344,7 +344,7 @@ class DashboardCatalog(SensorEntity):
                 "condition": WEATHER_CONDITIONS.get(state.state, state.state) if domain == "weather" and state else "",
                 "glyph": chr(int(self._icons.get(WEATHER_ICONS.get(state.state, "mdi:weather-cloudy"), self._icons["mdi:home-outline"]), 16)) if domain == "weather" and state else "",
                 "device_name": (device.name_by_user or device.name or entry.device_id) if device else "",
-                "name": attrs.get("friendly_name") or entry.name or entry.original_name or entry.entity_id,
+                "name": entry.name or attrs.get("friendly_name") or entry.original_name or entry.entity_id,
                 "state": state.state if state is not None else "unavailable",
                 "device_class": device_class,
                 "unit": climate_unit if domain in {"climate", "weather"} else unit,
@@ -437,9 +437,18 @@ class DashboardCatalog(SensorEntity):
             if domain == "fan": return 7
             if domain == "button": return 6
             if domain == "binary_sensor" and item["device_class"] in {"door", "window", "opening", "garage_door"}: return 8
-            if domain == "sensor" and item["device_class"] in {"power", "energy"}: return 5
+            if domain == "sensor":
+                dc = item["device_class"]
+                if dc in {"power", "energy", "voltage", "current", "apparent_power", "reactive_power", "power_factor"}: return 5
+                if dc == "temperature": return 11
+                if dc in {"humidity", "moisture"}: return 12
+                if dc in {"carbon_dioxide", "carbon_monoxide", "pm1", "pm10", "pm25", "volatile_organic_compounds", "volatile_organic_compounds_parts", "aqi", "nitrogen_dioxide", "ozone"}: return 13
+                if dc in {"atmospheric_pressure", "pressure", "illuminance", "wind_speed", "speed", "precipitation", "precipitation_intensity", "distance", "uv_index"}: return 14
+                return 15
+            if domain == "binary_sensor": return 15
             return 3
-        priority = {10:-1, 9:0, 2:1, 4:2, 0:3, 7:4, 1:5, 3:6, 5:7, 8:8, 6:9}
+        priority = {10:-1, 9:0, 2:1, 4:2, 0:3, 7:4, 1:5, 5:7, 8:8, 6:9,
+                    11:10, 12:11, 13:12, 14:13, 15:14, 3:15}
         for device_id, members in device_groups.items():
             if len(members) < 2: continue
             section = min((group_section(item) for item in members), key=lambda section: priority[section])
