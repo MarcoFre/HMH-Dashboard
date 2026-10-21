@@ -752,33 +752,10 @@ class RoomDevices {
     for(const auto &card:self->cards_) if(card.name==target || card.icon_tile==target) {
       const auto *e=self->find(card.entity_id);if(e && e->domain=="sensor") {self->open_history(*e);return;}
     }
-      for(const auto &h:self->device_headings_) if(h.obj==target) {
-      self->pending_device_=h.key;
-      lv_async_call([](void *data) {
-        auto *d=static_cast<RoomDevices *>(data);
-        auto previous=hmh_widget_layout.closed_devices;
-        auto &closed=hmh_widget_layout.closed_devices;
-        auto found=std::find(closed.begin(),closed.end(),d->pending_device_);
-        if(found==closed.end()) closed.push_back(d->pending_device_); else closed.erase(found);
-        bool saved=hmh_widget_layout.save();
-        if(!saved) closed=std::move(previous);
-        d->layout_dirty_=true;d->refresh(false);
-        if(!saved) lv_label_set_text(d->hint_,"Spazio impostazioni esaurito: modifica non salvata.");
-      },self);return;
-    }
-    for (const auto &h : self->headings_) if (h.obj == target) {
-      self->pending_group_ = h.group;
-      lv_async_call([](void *data) {
-        auto *d = static_cast<RoomDevices *>(data);
-        auto previous = hmh_widget_layout.rooms;
-        hmh_widget_layout.room(d->area_).collapsed ^= 1u << d->pending_group_;
-        bool saved = hmh_widget_layout.save();
-        if (!saved) hmh_widget_layout.rooms = std::move(previous);
-        d->layout_dirty_ = true; d->refresh(false);
-        if (!saved) lv_label_set_text(d->hint_, "Spazio impostazioni esaurito: modifica non salvata.");
-      }, self);
-      return;
-    }
+      // Device headings also remain draggable, never collapsible.
+      for(const auto &h:self->device_headings_) if(h.obj==target) return;
+    // Category headings are drag handles only: tap does not collapse.
+    for (const auto &h : self->headings_) if (h.obj == target) return;
     for (const auto &card : self->cards_) if (card.name == target || card.icon_tile == target) {
       self->command(card.obj); return;
     }
@@ -1814,10 +1791,7 @@ class RoomDevices {
     }
     if(signature!=groups_signature_) {layout_dirty_=true;groups_signature_=signature;} // Device metric changes force a complete layout recalculation.
     auto all_selected = selected;
-    selected.erase(std::remove_if(selected.begin(), selected.end(), [&](const Entity *e) {
-      return (!categories && hmh_widget_layout.collapsed(area_,section(*e))) ||
-        hmh_widget_layout.device_closed(block_key(*e));
-    }),selected.end());
+    // Every labelled widget stays visible; legacy collapsed preferences are ignored.
     bool rebuild = layout_dirty_ || force_rebuild || selected.size() != cards_.size();
     if (!rebuild) for (size_t i = 0; i < selected.size(); ++i) {
       if (selected[i]->id != cards_[i].entity_id) { rebuild = true; break; }
@@ -1851,7 +1825,7 @@ class RoomDevices {
             ordered_groups.push_back(g);
         }
         auto narrow_group=[&](int group)->bool {
-          if(hmh_widget_layout.collapsed(area_,group)) return false;
+          // Collapse state is no longer considered.
           const Entity *only=nullptr;
           for(const Entity *item:all_selected) if(section(*item)==group) {
             if(only) return false;
@@ -1861,11 +1835,10 @@ class RoomDevices {
           const std::string key=block_key(*only);
           for(const auto &b:device_blocks_)
             if(b.key==key && b.grouped) return false;
-          if(hmh_widget_layout.device_closed(key)) return false;
-          return only->domain=="sensor" || only->domain=="binary_sensor" ||
-              only->domain=="switch" || only->domain=="input_boolean" ||
-              only->domain=="button" ||
-              (only->domain=="light" && !only->brightness_supported);
+          // Devices no longer collapse.
+          // A single normal card uses two logical columns, including
+          // thermostats and other controls; exclude only full-width alarms.
+          return only->domain!="alarm_control_panel";
         };
         for(size_t n=0;n+1<ordered_groups.size();) {
           if(narrow_group(ordered_groups[n]) && narrow_group(ordered_groups[n+1])) {
@@ -1886,8 +1859,7 @@ class RoomDevices {
             if(!block.grouped || block.items.size()!=2 ||
                block.items[0]->domain!="switch" &&
                block.items[0]->domain!="input_boolean") return false;
-            if(hmh_widget_layout.device_closed(block.key) ||
-               (!categories && hmh_widget_layout.collapsed(area_,block.group))) return false;
+            // Previously saved collapse flags no longer affect layout.
             return true;
           };
           if(a.group==b.group && compact(a) && compact(b)) {
@@ -1904,6 +1876,7 @@ class RoomDevices {
       int paired_pending_group=-1,paired_origin_y=0,paired_first_bottom=0;
       bool paired_second_active=false;
       int category_x_offset=0;
+      bool category_pair_active=false;
       for (size_t i = 0; i < all_selected.size(); ++i) {
         const auto &e = *all_selected[i];
         int group = section(e);
@@ -1931,15 +1904,15 @@ class RoomDevices {
             paired_pending_group=paired_second[static_cast<size_t>(it-paired_first.begin())];
             paired_origin_y=layout_y;
           }
-          if(first_of_pair || second_of_pair)
+          category_pair_active=first_of_pair || second_of_pair;
+          if(category_pair_active)
             tile_grid=HmhTileGrid(paired_half_width,2,responsive.size(40),gap);
           else
             tile_grid=HmhTileGrid(inner_width,tile_columns,responsive.size(40),gap);
           tile_grid.reset(layout_y);
           const char *title = group == 0 ? "LUCI" : group == 1 ? "INTERRUTTORI" : group == 2 ? "TERMOSTATI" : group == 3 ? "SENSORI" : group == 4 ? "APERTURE" : group == 5 ? "ENERGIA" : group == 7 ? "VENTILATORI" : group == 10 ? "ALLARME" : group == 9 ? "PURIFICATORI" : group == 8 ? "PORTE E FINESTRE" : "PULSANTI";
           size_t count = 0; for (const auto *item : all_selected) if (section(*item) == group) ++count;
-          bool closed = !categories && hmh_widget_layout.collapsed(area_, group);
-          std::string caption = std::string(categories ? "" : closed ? "+ " : "- ") + title + " · " + std::to_string(count);
+          std::string caption = std::string(categories ? "" : "- ") + title + " · " + std::to_string(count);
           auto *heading = make_label(list_, 2+category_x_offset, layout_y,
                first_of_pair || second_of_pair ? paired_half_width-8 : layout_width_-18, caption.c_str());
           lv_obj_set_height(heading, 24);
@@ -1953,7 +1926,7 @@ class RoomDevices {
           previous_section = group;
           tile_grid.reset(layout_y);
         }
-        if (!categories && hmh_widget_layout.collapsed(area_, group)) continue;
+        // All categories are always expanded.
         const auto key=block_key(e);
         // Standalone cards in the same category share grid occupancy.
         const bool continuing_standalone=key[0]=='@' &&
@@ -1979,13 +1952,13 @@ class RoomDevices {
             tile_grid=HmhTileGrid(paired_half_width,2,responsive.size(40),gap);
           else
             tile_grid=HmhTileGrid(
-                category_x_offset?paired_half_width:inner_width,
-                category_x_offset?2:tile_columns,responsive.size(40),gap);
+                category_pair_active?paired_half_width:inner_width,
+                category_pair_active?2:tile_columns,responsive.size(40),gap);
           tile_grid.reset(layout_y);
           previous_device=key;
           if(key[0]!='@') {
             size_t count=0;for(const auto &block:device_blocks_) if(block.key==key) count=block.items.size();
-            std::string caption=std::string(hmh_widget_layout.device_closed(key)?"+ ":"- ")+
+            std::string caption=std::string("- ")+
               (e.device_name.empty()?e.device:e.device_name)+" · "+std::to_string(count);
             if(categories && area_name) caption+=" · "+area_name(e.area);
             const int device_x=category_x_offset+(paired_right?paired_right_x:0);
@@ -2000,7 +1973,7 @@ class RoomDevices {
           }
         }
         if(continuing_standalone) previous_device=key;
-        if(hmh_widget_layout.device_closed(key)) continue;
+        // Device groups are no longer collapsible.
         // Gaia 0.7.1: footprints depend on actual controls and content.
         // A simple barometer has the same footprint as other numerical sensors.
         // Expand only for controls that truly require more space.
