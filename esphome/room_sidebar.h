@@ -829,7 +829,7 @@ class RoomDevices {
       auto *self = static_cast<RoomDevices *>(lv_timer_get_user_data(timer));
       if (lv_indev_get_state(self->drag_input_) == LV_INDEV_STATE_RELEASED) { self->update_drag(); self->finish_drag(); }
       else self->update_drag();
-    }, 60, this);
+    }, 35, this);
     update_drag();
   }
   void update_drag() {
@@ -839,8 +839,15 @@ class RoomDevices {
           std::max(0,800-static_cast<int>(lv_obj_get_width(drag_ghost_)))),
         std::clamp(static_cast<int>(point.y)-44,0,428));
     lv_area_t bounds; lv_obj_get_coords(list_, &bounds);
-    if (point.y < bounds.y1 + 35) lv_obj_scroll_by(list_, 0, 10, LV_ANIM_OFF);
-    else if (point.y > bounds.y2 - 35) lv_obj_scroll_by(list_, 0, -10, LV_ANIM_OFF);
+    // Faster edge auto-scroll during a drag. Increase speed near the edge
+    // without moving or reparenting any live cards.
+    const int upper=point.y-bounds.y1, lower=bounds.y2-point.y;
+    const int edge=HmhLayout::current().size(78);
+    const int max_step=HmhLayout::current().size(32);
+    if(upper<edge)
+      lv_obj_scroll_by(list_,0,std::clamp((edge-upper)/2,8,max_step),LV_ANIM_OFF);
+    else if(lower<edge)
+      lv_obj_scroll_by(list_,0,-std::clamp((edge-lower)/2,8,max_step),LV_ANIM_OFF);
     lv_obj_update_layout(list_);
     lv_obj_t *nearest = nullptr;
     long best = 0x7FFFFFFF;
@@ -862,6 +869,7 @@ class RoomDevices {
         auto key=block_key(*e);
         lv_area_t r;lv_obj_get_coords(card.obj,&r);
         long distance=std::abs(static_cast<int>(point.y)-(r.y1+r.y2)/2);
+        if(key==drag_device_) continue;
         if(distance<best) {best=distance;nearest=card.obj;drop_device_=key;drop_after_=point.y>(r.y1+r.y2)/2;}
       }
     } else {
@@ -875,6 +883,7 @@ class RoomDevices {
         lv_area_t r; lv_obj_get_coords(card.obj, &r);
         long dx = point.x - (r.x1 + r.x2) / 2, dy = point.y - (r.y1 + r.y2) / 2;
         long distance = dx * dx + dy * dy;
+        if (e->id==drag_entity_) continue;
         if (distance < best) {
           best = distance; nearest = card.obj; drop_entity_ = e->id;
           drop_after_ = std::abs(dy) > (r.y2 - r.y1) / 3 ? dy > 0 : dx > 0;
@@ -907,8 +916,16 @@ class RoomDevices {
           if(e && block_key(*e)==drop_device_) marker_y=std::max(marker_y,static_cast<int>(lv_obj_get_y(card.obj)+lv_obj_get_height(card.obj)));
         }
       }
-      lv_obj_set_pos(drop_marker_,lv_obj_get_x(nearest),marker_y);
+      // Use a visible cyan insertion line spanning the entire room grid.
+      lv_obj_set_size(drop_marker_,std::max(40,layout_width_-20),4);
+      lv_obj_set_style_radius(drop_marker_,2,0);
+      lv_obj_set_style_border_width(drop_marker_,0,0);
+      lv_obj_set_style_bg_opa(drop_marker_,LV_OPA_COVER,0);
+      lv_obj_set_pos(drop_marker_,0,marker_y);
       lv_obj_move_foreground(drop_marker_);
+    } else {
+      // No valid destination (e.g. a single card): don't display a false drop.
+      lv_obj_add_flag(drop_marker_,LV_OBJ_FLAG_HIDDEN);
     }
   }
   void finish_drag() {
