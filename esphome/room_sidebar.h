@@ -918,8 +918,9 @@ class RoomDevices {
     // This keeps a device in place even when its first sensor changes position.
     if(!drag_category_) {
       std::vector<std::string> visible;
-      for(const auto &block:device_blocks_) if(block.group==drag_group_)
-        for(const auto *e:block.items) visible.push_back(e->id);
+      for(const auto &block:device_blocks_)
+        if(area_.rfind("@category:",0)!=0 || block.group==drag_group_)
+          for(const auto *e:block.items) visible.push_back(e->id);
       auto &order=hmh_widget_layout.entities;
       for(const auto &id:visible) if(std::find(order.begin(),order.end(),id)==order.end()) order.push_back(id);
       size_t index=0;
@@ -956,7 +957,9 @@ class RoomDevices {
     } else if (!drag_category_ && drag_device_.empty() && drag_entity_ != drop_entity_) {
       // Seed all entities in this category, preserving existing saved order.
       std::vector<const Entity *> group;
-      for (const auto &e : entities_) if (section(e) == drag_group_) group.push_back(&e);
+      for (const auto &e : entities_)
+        if(area_.rfind("@category:",0)!=0 ? matches_view(e) && !e.chip :
+           section(e)==drag_group_) group.push_back(&e);
       std::stable_sort(group.begin(), group.end(), [](const Entity *a, const Entity *b) {
         return hmh_widget_layout.entity_rank(a->id) < hmh_widget_layout.entity_rank(b->id);
       });
