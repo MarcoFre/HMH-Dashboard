@@ -1908,6 +1908,7 @@ class RoomDevices {
         const auto &e = *all_selected[i];
         int group = section(e);
         if (group != previous_section) {
+          previous_device.clear();
           // Device pairs never cross category boundaries.
           device_pair_next.clear();
           device_pair_left=false;
@@ -1954,7 +1955,11 @@ class RoomDevices {
         }
         if (!categories && hmh_widget_layout.collapsed(area_, group)) continue;
         const auto key=block_key(e);
-        if(key!=previous_device) {
+        // Standalone cards in the same category share grid occupancy.
+        const bool continuing_standalone=key[0]=='@' &&
+            !previous_device.empty() && previous_device[0]=='@' &&
+            group==previous_section;
+        if(key!=previous_device && !continuing_standalone) {
           const bool paired_right=key==device_pair_next;
           if(paired_right) {
             device_pair_pending_bottom=tile_grid.bottom();
@@ -1994,6 +1999,7 @@ class RoomDevices {
             device_headings_.push_back({group,key,heading});layout_y+=27;tile_grid.reset(layout_y);
           }
         }
+        if(continuing_standalone) previous_device=key;
         if(hmh_widget_layout.device_closed(key)) continue;
         // Gaia 0.7.1: footprints depend on actual controls and content.
         // A simple barometer has the same footprint as other numerical sensors.
