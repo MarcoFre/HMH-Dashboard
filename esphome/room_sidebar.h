@@ -2673,6 +2673,11 @@ class RoomDevices {
         lv_color_t color=known?lv_color_hex(e.state=="on"?0xF59E0B:0x22C55E):hmh_color(0x64748B);
         if(card.icon) lv_obj_set_style_text_color(card.icon,color,0);
         lv_obj_set_style_bg_color(card.icon_tile,known?hmh_color(e.state=="on"?0x49321D:0x163D2B):hmh_color(0x334155),0);
+        // Same visual vocabulary as switch widgets: a colored status ring,
+        // no OPEN/CLOSED text. The optional battery badge stays independent.
+        lv_obj_set_style_border_width(card.icon_tile,known?3:2,0);
+        lv_obj_set_style_border_color(card.icon_tile,color,0);
+        lv_obj_set_style_border_opa(card.icon_tile,known?LV_OPA_COVER:LV_OPA_60,0);
       }
       if(card.battery.root) card.battery.update(e.battery_level,e.battery_known,e.battery_low);
       if (card.lamp) {
