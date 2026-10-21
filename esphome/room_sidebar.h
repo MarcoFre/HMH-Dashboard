@@ -744,7 +744,14 @@ class RoomDevices {
     for (const auto &h : self->headings_) if (h.obj == target) { self->start_drag(h.group, ""); return; }
       for (const auto &card : self->cards_) if (card.name == target || card.icon_tile == target) {
         const Entity *e = self->find(card.entity_id);
-        if (e) self->start_drag(section(*e), e->id);
+        if (e) {
+          const std::string key=self->block_key(*e);
+          const auto block=std::find_if(self->device_blocks_.begin(),self->device_blocks_.end(),
+              [&](const DeviceBlock &b){return b.key==key && b.grouped;});
+          if(self->area_.rfind("@category:",0)!=0 && block!=self->device_blocks_.end())
+            self->start_drag(section(*e),"",key);
+          else self->start_drag(section(*e),e->id);
+        }
         return;
       }
     }
@@ -844,14 +851,15 @@ class RoomDevices {
         if (distance < best) { best = distance; nearest = h.obj; drop_group_ = h.group; drop_after_ = point.y > (r.y1 + r.y2) / 2; }
       }
     } else if(!drag_device_.empty()) {
-      for(const auto &h:device_headings_) if(h.group==drag_group_) {
+      for(const auto &h:device_headings_) if(h.group==drag_group_ || area_.rfind("@category:",0)!=0) {
         lv_area_t r;lv_obj_get_coords(h.obj,&r);
         long distance=std::abs(static_cast<int>(point.y)-(r.y1+r.y2)/2);
         if(distance<best) {best=distance;nearest=h.obj;drop_device_=h.key;drop_after_=point.y>(r.y1+r.y2)/2;}
       }
       for(const auto &card:cards_) {
-        const Entity *e=find(card.entity_id);if(!e || section(*e)!=drag_group_) continue;
-        auto key=block_key(*e);if(key[0]!='@') continue;
+        const Entity *e=find(card.entity_id);if(!e) continue;
+        if(area_.rfind("@category:",0)==0 && section(*e)!=drag_group_) continue;
+        auto key=block_key(*e);
         lv_area_t r;lv_obj_get_coords(card.obj,&r);
         long distance=std::abs(static_cast<int>(point.y)-(r.y1+r.y2)/2);
         if(distance<best) {best=distance;nearest=card.obj;drop_device_=key;drop_after_=point.y>(r.y1+r.y2)/2;}
@@ -859,7 +867,7 @@ class RoomDevices {
     } else {
       for (const auto &card : cards_) {
         const Entity *e = find(card.entity_id);
-        if (!e || section(*e) != drag_group_) continue;
+        if (!e || (area_.rfind("@category:",0)==0 && section(*e) != drag_group_)) continue;
         const auto *source=find(drag_entity_);
         if(!source) continue;
         auto source_key=block_key(*source),target_key=block_key(*e);
@@ -1789,8 +1797,9 @@ class RoomDevices {
       }
     }
     std::stable_sort(device_blocks_.begin(),device_blocks_.end(),[&](const DeviceBlock &a,const DeviceBlock &b){
-      if(a.group!=b.group) return categories?a.group<b.group:
-        hmh_widget_layout.category_rank(area_,a.group)<hmh_widget_layout.category_rank(area_,b.group);
+      // Room view is device-first: global entity order, without sections.
+      // Category view keeps its functional grouping.
+      if(categories && a.group!=b.group) return a.group<b.group;
       return hmh_widget_layout.entity_rank(a.items[0]->id)<hmh_widget_layout.entity_rank(b.items[0]->id);
     });
     selected.clear();std::string signature;
@@ -1895,7 +1904,7 @@ class RoomDevices {
       for (size_t i = 0; i < all_selected.size(); ++i) {
         const auto &e = *all_selected[i];
         int group = section(e);
-        if (group != previous_section) {
+        if (categories && group != previous_section) {
           previous_device.clear();
           // Device pairs never cross category boundaries.
           device_pair_next.clear();
@@ -1947,7 +1956,7 @@ class RoomDevices {
         const bool continuing_standalone=key[0]=='@' &&
             !previous_device.empty() && previous_device[0]=='@' &&
             group==previous_section;
-        if(key!=previous_device && !continuing_standalone) {
+        if(categories && key!=previous_device && !continuing_standalone) {
           const bool paired_right=key==device_pair_next;
           if(paired_right) {
             device_pair_pending_bottom=tile_grid.bottom();
@@ -1987,7 +1996,7 @@ class RoomDevices {
             device_headings_.push_back({group,key,heading});layout_y+=27;tile_grid.reset(layout_y);
           }
         }
-        if(continuing_standalone) previous_device=key;
+        if(continuing_standalone || !categories) previous_device=key;
         // Device groups are no longer collapsible.
         // Gaia 0.7.1: footprints depend on actual controls and content.
         // A simple barometer has the same footprint as other numerical sensors.
