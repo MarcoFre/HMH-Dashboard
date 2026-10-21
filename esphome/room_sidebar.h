@@ -1926,8 +1926,8 @@ class RoomDevices {
             tile_grid=HmhTileGrid(inner_width,tile_columns,responsive.size(40),gap);
           tile_grid.reset(layout_y);
           const char *title = group == 0 ? "LUCI" : group == 1 ? "INTERRUTTORI" : group == 2 ? "TERMOSTATI" : group == 3 ? "ALTRI SENSORI" : group == 4 ? "APERTURE" : group == 5 ? "ENERGIA" : group == 7 ? "VENTILATORI" : group == 10 ? "ALLARME" : group == 9 ? "PURIFICATORI" : group == 8 ? "PORTE E FINESTRE" : group == 11 ? "TEMPERATURA" : group == 12 ? "UMIDITÀ" : group == 13 ? "QUALITÀ ARIA" : group == 14 ? "AMBIENTE" : group == 15 ? "ALTRI SENSORI" : "PULSANTI";
-          size_t count = 0; for (const auto *item : all_selected) if (section(*item) == group) ++count;
-          std::string caption = std::string(categories ? "" : "- ") + title + " · " + std::to_string(count);
+          // Category titles are labels, not counters or collapse controls.
+          std::string caption = title;
           auto *heading = make_label(list_, 2+category_x_offset, layout_y,
                first_of_pair || second_of_pair ? paired_half_width-8 : layout_width_-18, caption.c_str());
           lv_obj_set_height(heading, 24);
