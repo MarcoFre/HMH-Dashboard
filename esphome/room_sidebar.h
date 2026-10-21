@@ -2462,7 +2462,10 @@ class RoomDevices {
           status.clear();
         }
       }
-      if(is_contact(e)) status.clear();
+      // Contacts must communicate their actual state, not just the icon color.
+      // The battery badge remains independent and optional.
+      if(is_contact(e))
+        status=e.state=="on"?"APERTA":e.state=="off"?"CHIUSA":"NON DISPONIBILE";
       hmh_label_set_if_changed(card.status, status.c_str());
       if(card.uniform_composite && !card.composite_metrics.empty()) {
         lv_obj_add_flag(card.name,LV_OBJ_FLAG_HIDDEN);
@@ -2667,11 +2670,17 @@ class RoomDevices {
       lv_obj_set_style_text_opa(card.obj, LV_OPA_COVER, LV_STATE_DISABLED);
       lv_obj_set_style_bg_color(card.icon_tile, hmh_color(available(e) && (active || e.domain == "sensor") ? 0x4A3D22 : 0x334155), 0);
       if(is_contact(e)) {
-        lv_obj_set_y(card.name,17);lv_obj_set_height(card.name,46);
-        lv_obj_add_flag(card.status,LV_OBJ_FLAG_HIDDEN);
+        // Keep the name above, show OPEN/CLOSED prominently underneath.
+        lv_obj_set_y(card.name,17);
+        lv_obj_set_height(card.name,46);
+        lv_obj_clear_flag(card.status,LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_pos(card.status,16,69);
+        lv_obj_set_size(card.status,std::max(70,card_width-32),30);
+        lv_obj_set_style_text_font(card.status,hmh_runtime_text_20,0);
         const bool known=e.state=="on" || e.state=="off";
-        lv_color_t color=known?lv_color_hex(e.state=="on"?0xF59E0B:0x22C55E):hmh_color(0x64748B);
-        if(card.icon) lv_obj_set_style_text_color(card.icon,color,0);
+        const uint32_t accent=!known?0x94A3B8:e.state=="on"?0xF59E0B:0x22C55E;
+        lv_obj_set_style_text_color(card.status,lv_color_hex(accent),0);
+        if(card.icon) lv_obj_set_style_text_color(card.icon,lv_color_hex(accent),0);
         lv_obj_set_style_bg_color(card.icon_tile,known?hmh_color(e.state=="on"?0x49321D:0x163D2B):hmh_color(0x334155),0);
       }
       if(card.battery.root) card.battery.update(e.battery_level,e.battery_known,e.battery_low);
