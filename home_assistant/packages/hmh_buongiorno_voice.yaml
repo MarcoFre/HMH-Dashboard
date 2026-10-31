@@ -44,8 +44,12 @@ script:
             originale e caloroso in italiano, massimo 45 parole.
             Marco a casa: {{ marco }}. Enza a casa: {{ enza }}.
             Saluta per nome solo chi è presente. Oggi è {{ now().strftime('%d/%m/%Y') }}.
-            Usa uno o due tag emotivi adatti alla sintesi vocale ElevenLabs,
-            scegliendo tra [warmly], [cheerfully], [mischievously], [laughs].
+            Usa da tre a cinque tag emozionali ElevenLabs distribuiti
+            nel saluto, scegliendo tra [warmly], [cheerfully],
+            [excited], [mischievously], [whispers], [laughs].
+            Alterna espressività e pause, ma senza esagerare con
+            [laughs] e senza rendere il testo artificiale.
+            Il parlato deve essere in italiano; i tag restano in inglese.
             Evita ripetizioni. Niente appuntamenti o domande.
             Rispondi solo con la frase da pronunciare.
         response_variable: risposta_ai
@@ -58,11 +62,11 @@ script:
             {% if txt | trim %}
               {{ txt | trim }}
             {% elif marco and enza %}
-              [warmly] Buongiorno Marco ed Enza! Vi auguro una splendida giornata!
+              [cheerfully] Buongiorno Marco ed Enza! Vi auguro una splendida giornata!
             {% elif marco %}
-              [warmly] Buongiorno Marco! Ti auguro una splendida giornata!
+              [cheerfully] Buongiorno Marco! Ti auguro una splendida giornata!
             {% else %}
-              [warmly] Buongiorno Enza! Ti auguro una splendida giornata!
+              [cheerfully] Buongiorno Enza! Ti auguro una splendida giornata!
             {% endif %}
       - action: input_text.set_value
         target:
@@ -77,7 +81,7 @@ script:
           message: "{{ saluto }}"
           cache: false
           options:
-            voice: EXAVITQu4vr4xnSDxMaL
+            voice: oFfGNOowCXrKYgUrLSTS
             model: eleven_v4_turbo
       - delay: "00:00:02"
       - wait_template: >-
