@@ -41,7 +41,12 @@ script:
           task_name: buongiorno_hmh
           instructions: >-
             Sei la voce affettuosa della casa. Inventa un saluto mattutino
-            originale e caloroso in italiano, massimo 45 parole.
+            originale e caloroso, massimo 45 parole.
+            LINGUA OBBLIGATORIA: italiano naturale (it-IT).
+            Scrivi tutte le parole pronunciate esclusivamente in italiano:
+            niente parole, esclamazioni o frasi inglesi, neppure nei saluti.
+            Gli unici elementi in inglese ammessi sono i tag emozionali
+            ElevenLabs tra parentesi quadre, che non sono testo da pronunciare.
             Marco a casa: {{ marco }}. Enza a casa: {{ enza }}.
             Saluta per nome solo chi è presente. Oggi è {{ now().strftime('%d/%m/%Y') }}.
             Usa uno o due tag emotivi adatti alla sintesi vocale ElevenLabs,
