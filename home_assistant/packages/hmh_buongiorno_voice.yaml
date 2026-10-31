@@ -40,14 +40,14 @@ script:
           entity_id: ai_task.openai_ai_task_3
           task_name: buongiorno_hmh
           instructions: >-
-            Scrivi un breve buongiorno originale e affettuoso in italiano
-            per la casa, massimo 45 parole. Marco presente: {{ marco }}.
-            Enza presente: {{ enza }}. Oggi: {{ now().strftime('%d/%m/%Y') }}.
-            Saluta per nome soltanto chi è presente. Usa un linguaggio
-            semplice e parlato, naturale, caldo e un poco spiritoso.
-            Varia il messaggio ogni giorno. Non fare domande e non
-            menzionare appuntamenti. Restituisci solo il saluto,
-            senza indicazioni di recitazione o tag tra parentesi quadre.
+            Sei la voce affettuosa della casa. Inventa un saluto mattutino
+            originale e caloroso in italiano, massimo 45 parole.
+            Marco a casa: {{ marco }}. Enza a casa: {{ enza }}.
+            Saluta per nome solo chi è presente. Oggi è {{ now().strftime('%d/%m/%Y') }}.
+            Usa uno o due tag emotivi adatti alla sintesi vocale ElevenLabs,
+            scegliendo tra [warmly], [cheerfully], [mischievously], [laughs].
+            Evita ripetizioni. Niente appuntamenti o domande.
+            Rispondi solo con la frase da pronunciare.
         response_variable: risposta_ai
         continue_on_error: true
       - variables:
@@ -56,13 +56,13 @@ script:
               and risposta_ai is mapping and risposta_ai.data is defined
               and risposta_ai.data is string else '' %}
             {% if txt | trim %}
-              {{ txt | regex_replace('\\[[^\\]]*\\]', '') | trim }}
+              {{ txt | trim }}
             {% elif marco and enza %}
-              Buongiorno Marco ed Enza! Vi auguro una splendida giornata!
+              [warmly] Buongiorno Marco ed Enza! Vi auguro una splendida giornata!
             {% elif marco %}
-              Buongiorno Marco! Ti auguro una splendida giornata!
+              [warmly] Buongiorno Marco! Ti auguro una splendida giornata!
             {% else %}
-              Buongiorno Enza! Ti auguro una splendida giornata!
+              [warmly] Buongiorno Enza! Ti auguro una splendida giornata!
             {% endif %}
       - action: input_text.set_value
         target:
