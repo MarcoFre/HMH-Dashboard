@@ -76,27 +76,24 @@ script:
           entity_id: input_text.hmh_ultimo_buongiorno
         data:
           value: "{{ oggi }}"
-      - action: tts.speak
-        target:
-          entity_id: tts.elevenlabs_text_to_speech
+      # Diffusione a tutti i satelliti etichettati HMH_Audio_Notifica.
+      # L'audio usa il TTS della pipeline di ciascun satellite.
+      - action: script.hmh_audio_invia
         data:
-          media_player_entity_id: media_player.home_assistant_voice_speaker_02_media_player
-          message: "{{ saluto }}"
-          cache: false
-          options:
-            voice: oFfGNOowCXrKYgUrLSTS
-            model: eleven_v4_turbo
-      - delay: "00:00:02"
-      - wait_template: >-
-          {{ not is_state('media_player.home_assistant_voice_speaker_02_media_player', 'playing') }}
-        timeout: "00:00:45"
-        continue_on_timeout: true
+          categoria: notifica
+          messaggio: "{{ saluto }}"
+      # Per le risposte vocali serve un solo satellite di ascolto.
+      - variables:
+          assist_dialogo: >-
+            {{ label_entities('hmh_audio_notifica')
+               | select('match', '^assist_satellite\\.')
+               | list | sort | first | default('', true) }}
       - choose:
-          - conditions: "{{ eventi | count > 0 }}"
+          - conditions: "{{ eventi | count > 0 and assist_dialogo | trim != '' }}"
             sequence:
               - action: assist_satellite.ask_question
                 data:
-                  entity_id: assist_satellite.ha_voice_assist_o3_assist_satellite
+                  entity_id: "{{ assist_dialogo | trim }}"
                   preannounce: false
                   question: >-
                     {% if marco and enza %}
@@ -154,16 +151,10 @@ script:
                         {% endfor %}
                         [warmly] Ecco gli appuntamenti di oggi:
                         {{ ns.items | join('; ') }}.
-                  - action: tts.speak
-                    target:
-                      entity_id: tts.elevenlabs_text_to_speech
+                  - action: script.hmh_audio_invia
                     data:
-                      media_player_entity_id: media_player.home_assistant_voice_speaker_02_media_player
-                      cache: false
-                      options:
-                        voice: oFfGNOowCXrKYgUrLSTS
-                        model: eleven_v4_turbo
-                      message: "{{ agenda_da_leggere }}"
+                      categoria: notifica
+                      messaggio: "{{ agenda_da_leggere }}"
 
 automation:
   - id: hmh_buongiorno_caffe
