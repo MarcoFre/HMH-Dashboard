@@ -82,11 +82,14 @@ script:
         data:
           categoria: notifica
           messaggio: "{{ saluto }}"
-      # Per le risposte vocali serve un solo satellite di ascolto.
+      # La domanda viene posta a un solo satellite abilitato all'input.
+      # Gli annunci restano destinati all'etichetta HMH_Audio_Notifica.
       - variables:
           assist_dialogo: >-
-            {{ label_entities('hmh_audio_notifica')
+            {{ label_entities('hmh_audio_input')
                | select('match', '^assist_satellite\\.')
+               | reject('is_state', 'unavailable')
+               | reject('is_state', 'unknown')
                | list | sort | first | default('', true) }}
       - choose:
           - conditions: "{{ eventi | count > 0 and assist_dialogo | trim != '' }}"
