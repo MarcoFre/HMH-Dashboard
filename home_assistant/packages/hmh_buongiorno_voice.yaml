@@ -77,7 +77,7 @@ script:
           message: "{{ saluto }}"
           cache: false
           options:
-            voice: gfKKsLN1k0oYYN9n2dXX
+            voice: EXAVITQu4vr4xnSDxMaL
             model: eleven_v4_turbo
       - delay: "00:00:02"
       - wait_template: >-
