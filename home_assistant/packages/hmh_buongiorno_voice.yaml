@@ -96,7 +96,7 @@ script:
             sequence:
               - action: assist_satellite.ask_question
                 data:
-                  entity_id: assist_satellite.home_assistant_voice_speaker_02_assist_satellite
+                  entity_id: assist_satellite.ha_voice_assist_o3_assist_satellite
                   preannounce: false
                   question: >-
                     {% if marco and enza %}
