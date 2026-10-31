@@ -2751,6 +2751,10 @@ class HmhCalendar {
   // Keep standby events separate from the calendar's currently browsed month.
   std::vector<Event> standby_events;
   int standby_year=0,standby_month=0;
+  std::vector<Event> standby_next_events;
+  int standby_next_year=0,standby_next_month=0;
+  uint32_t standby_refresh_at=0,standby_stage_at=0;
+  uint8_t standby_refresh_stage=0;
   lv_obj_t *panel=nullptr,*heading=nullptr,*list=nullptr,*days[42]={};
   int cell_day[42]={};
   void attach(lv_obj_t *parent) {
@@ -2808,16 +2812,40 @@ class HmhCalendar {
     bool change=today_year!=y||today_month!=m||today!=d;
     bool minute_change=!now_valid||now_hour!=hh||now_minute!=mm;
     today_year=y;today_month=m;today=d;now_hour=hh;now_minute=mm;now_valid=true;
-    if(change && (standby_year!=y || standby_month!=m)) {standby_events.clear();standby_year=0;standby_month=0;}
+    if(standby_year && (standby_year!=y || standby_month!=m)) {
+      // Advance the cached next month into the current-month slot.
+      if(standby_next_year==y && standby_next_month==m) standby_events=standby_next_events;
+      else standby_events.clear();
+      standby_year=y;standby_month=m;
+      standby_next_events.clear();standby_next_year=0;standby_next_month=0;
+      standby_refresh_at=0;standby_refresh_stage=0;
+    }
     if(!year){year=y;month=m;selected=0;fetch();render();}
     else if(change && year==y && month==m) fetch();
     if((change || minute_change) && year==y && month==m && panel && !lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN))render();
+    refresh_standby();
+  }
+  void refresh_standby() {
+    if(!enabled || !request || !now_valid || !today_year || !today_month) return;
+    const uint32_t now=lv_tick_get();
+    if(standby_refresh_stage==0 && (standby_refresh_at==0 || now-standby_refresh_at>=900000U)) {
+      standby_refresh_at=now?now:1;standby_stage_at=now;
+      standby_refresh_stage=1;
+      request(today_year,today_month);
+    } else if(standby_refresh_stage==1 && now-standby_stage_at>=4000U) {
+      standby_refresh_stage=2;
+      const int nm=today_month==12?1:today_month+1;
+      const int ny=today_year+(today_month==12?1:0);
+      request(ny,nm);
+    } else if(standby_refresh_stage==2 && now-standby_refresh_at>=900000U) {
+      standby_refresh_stage=0;
+    }
   }
   void set_today(int y,int m,int d){set_now(y,m,d,now_hour,now_minute);}  
   void choose_today(){selected=0;render();}
   void move_month(int delta){month+=delta;if(month<1){month=12;year--;}else if(month>12){month=1;year++;}selected=0;events.clear();render();fetch();}
   void fetch(){if(request&&enabled&&year&&month)request(year,month);}  
-  void set_enabled(bool e){if(enabled==e)return;enabled=e;if(!e){events.clear();standby_events.clear();standby_year=0;standby_month=0;if(panel)lv_obj_add_flag(panel,LV_OBJ_FLAG_HIDDEN);}else fetch();}
+  void set_enabled(bool e){if(enabled==e)return;enabled=e;if(!e){events.clear();standby_events.clear();standby_next_events.clear();standby_year=0;standby_month=0;standby_next_year=0;standby_next_month=0;standby_refresh_at=0;standby_refresh_stage=0;if(panel)lv_obj_add_flag(panel,LV_OBJ_FLAG_HIDDEN);}else fetch();}
   void show(bool visible){if(!panel)return;if(visible&&enabled){lv_obj_clear_flag(panel,LV_OBJ_FLAG_HIDDEN);render();fetch();}else lv_obj_add_flag(panel,LV_OBJ_FLAG_HIDDEN);}  
   void load(const std::string &payload){
     std::vector<Event> incoming;int ry=0,rm=0;bool ok=esphome::json::parse_json(hmh_json(payload),[&](JsonObject root)->bool{
@@ -2833,6 +2861,12 @@ class HmhCalendar {
     if(ry==today_year && rm==today_month) {
       standby_events=incoming;
       standby_year=ry;standby_month=rm;
+    }
+    const int next_m=today_month==12?1:today_month+1;
+    const int next_y=today_year+(today_month==12?1:0);
+    if(today_year && ry==next_y && rm==next_m) {
+      standby_next_events=incoming;
+      standby_next_year=ry;standby_next_month=rm;
     }
     if(ry!=year||rm!=month)return;
     events=std::move(incoming);render();
@@ -2888,16 +2922,29 @@ class HmhCalendar {
   bool standby_summary(std::string &text, lv_color_t &color) const {
     text.clear();
     const Event *best=nullptr; time_t best_ts=0;
-    const auto &source=(standby_year==today_year && standby_month==today_month)
-        ? standby_events : events;
-    for(const auto &e:source){
-      if(!is_upcoming_window(e)) continue;
+    auto consider=[&](const Event &e) {
+      if(!is_upcoming_window(e)) return;
+      int y,m,d,hh,mm;bool has_time;
+      if(!parse_iso(e.start,y,m,d,hh,mm,has_time)) return;
+      time_t ts=make_time(y,m,d,e.all_day?0:hh,e.all_day?0:mm,0);
+      if(start_day_diff(e)==0 && is_today_past(e)) return;
+      if(!best || ts<best_ts){best=&e;best_ts=ts;}
+    };
+    if(standby_year==today_year && standby_month==today_month)
+      for(const auto &e:standby_events) consider(e);
+    else if(year==today_year && month==today_month)
+      for(const auto &e:events) consider(e);
+    const int next_m=today_month==12?1:today_month+1;
+    const int next_y=today_year+(today_month==12?1:0);
+    if(standby_next_year==next_y && standby_next_month==next_m)
+      for(const auto &e:standby_next_events) consider(e);
+    /*
       int y,m,d,hh,mm;bool has_time;
       if(!parse_iso(e.start,y,m,d,hh,mm,has_time)) continue;
       time_t ts=make_time(y,m,d,e.all_day?0:hh,e.all_day?0:mm,0);
       if(start_day_diff(e)==0 && is_today_past(e)) continue;
       if(!best || ts<best_ts){best=&e;best_ts=ts;}
-    }
+    }*/
     if(!best) return false;
     color=event_color(*best);
     text="Prossimo appuntamento\n"+event_line(*best);
