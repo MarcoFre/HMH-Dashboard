@@ -2748,6 +2748,9 @@ class HmhCalendar {
   int year=0,month=0,selected=0,today=0,today_year=0,today_month=0;
   int now_hour=0,now_minute=0;bool now_valid=false;
   std::vector<Event> events;
+  // Keep standby events separate from the calendar's currently browsed month.
+  std::vector<Event> standby_events;
+  int standby_year=0,standby_month=0;
   lv_obj_t *panel=nullptr,*heading=nullptr,*list=nullptr,*days[42]={};
   int cell_day[42]={};
   void attach(lv_obj_t *parent) {
@@ -2805,14 +2808,16 @@ class HmhCalendar {
     bool change=today_year!=y||today_month!=m||today!=d;
     bool minute_change=!now_valid||now_hour!=hh||now_minute!=mm;
     today_year=y;today_month=m;today=d;now_hour=hh;now_minute=mm;now_valid=true;
+    if(change && (standby_year!=y || standby_month!=m)) {standby_events.clear();standby_year=0;standby_month=0;}
     if(!year){year=y;month=m;selected=0;fetch();render();}
-    else if((change || minute_change) && year==y && month==m && panel && !lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN))render();
+    else if(change && year==y && month==m) fetch();
+    if((change || minute_change) && year==y && month==m && panel && !lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN))render();
   }
   void set_today(int y,int m,int d){set_now(y,m,d,now_hour,now_minute);}  
   void choose_today(){selected=0;render();}
   void move_month(int delta){month+=delta;if(month<1){month=12;year--;}else if(month>12){month=1;year++;}selected=0;events.clear();render();fetch();}
   void fetch(){if(request&&enabled&&year&&month)request(year,month);}  
-  void set_enabled(bool e){if(enabled==e)return;enabled=e;if(!e){events.clear();if(panel)lv_obj_add_flag(panel,LV_OBJ_FLAG_HIDDEN);}else fetch();}
+  void set_enabled(bool e){if(enabled==e)return;enabled=e;if(!e){events.clear();standby_events.clear();standby_year=0;standby_month=0;if(panel)lv_obj_add_flag(panel,LV_OBJ_FLAG_HIDDEN);}else fetch();}
   void show(bool visible){if(!panel)return;if(visible&&enabled){lv_obj_clear_flag(panel,LV_OBJ_FLAG_HIDDEN);render();fetch();}else lv_obj_add_flag(panel,LV_OBJ_FLAG_HIDDEN);}  
   void load(const std::string &payload){
     std::vector<Event> incoming;int ry=0,rm=0;bool ok=esphome::json::parse_json(hmh_json(payload),[&](JsonObject root)->bool{
@@ -2824,7 +2829,12 @@ class HmhCalendar {
         if(!e.start.empty()&&incoming.size()<120)incoming.push_back(std::move(e));
       }return true;
     });
-    if(!ok||ry!=year||rm!=month)return;
+    if(!ok)return;
+    if(ry==today_year && rm==today_month) {
+      standby_events=incoming;
+      standby_year=ry;standby_month=rm;
+    }
+    if(ry!=year||rm!=month)return;
     events=std::move(incoming);render();
   }
   bool includes(const Event &e,int d)const{
@@ -2878,7 +2888,9 @@ class HmhCalendar {
   bool standby_summary(std::string &text, lv_color_t &color) const {
     text.clear();
     const Event *best=nullptr; time_t best_ts=0;
-    for(const auto &e:events){
+    const auto &source=(standby_year==today_year && standby_month==today_month)
+        ? standby_events : events;
+    for(const auto &e:source){
       if(!is_upcoming_window(e)) continue;
       int y,m,d,hh,mm;bool has_time;
       if(!parse_iso(e.start,y,m,d,hh,mm,has_time)) continue;
