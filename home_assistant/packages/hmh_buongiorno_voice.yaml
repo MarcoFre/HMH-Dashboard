@@ -1,0 +1,165 @@
+# HMH Buongiorno Voice - Sarah ElevenLabs
+# Richiede packages abilitati in Home Assistant.
+input_text:
+  hmh_ultimo_buongiorno:
+    name: HMH ultimo buongiorno
+    max: 10
+input_boolean:
+  hmh_buongiorno_test:
+    name: HMH buongiorno test manuale
+    icon: mdi:coffee
+script:
+  hmh_buongiorno_usa_agenda:
+    alias: HMH - Buongiorno interattivo
+    mode: single
+    sequence:
+      - variables:
+          oggi: "{{ now().strftime('%Y-%m-%d') }}"
+          marco: "{{ is_state('person.marco', 'home') }}"
+          enza: "{{ is_state('person.enza', 'home') }}"
+      - condition: template
+        value_template: "{{ states('input_text.hmh_ultimo_buongiorno') != oggi and (marco or enza) }}"
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.casa
+        data:
+          start_date_time: "{{ now().isoformat() }}"
+          end_date_time: "{{ (today_at('00:00') + timedelta(days=1)).isoformat() }}"
+        response_variable: agenda
+      - variables:
+          eventi: >-
+            {% set ns = namespace(items=[]) %}
+            {% for ev in agenda.get('calendar.casa', {}).get('events', []) %}
+              {% if '[HMH_PROMEMORIA]' not in (ev.get('description', '') | string) %}
+                {% set ns.items = ns.items + [ev] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.items }}
+      - action: ai_task.generate_data
+        data:
+          entity_id: ai_task.openai_ai_task_3
+          task_name: buongiorno_hmh
+          instructions: >-
+            Sei la voce affettuosa della casa. Inventa un saluto mattutino
+            originale e caloroso in italiano, massimo 45 parole.
+            Marco a casa: {{ marco }}. Enza a casa: {{ enza }}.
+            Saluta per nome solo chi è presente. Oggi è {{ now().strftime('%d/%m/%Y') }}.
+            Usa uno o due tag emotivi adatti alla sintesi vocale ElevenLabs,
+            scegliendo tra [warmly], [cheerfully], [mischievously], [laughs].
+            Evita ripetizioni. Niente appuntamenti o domande.
+            Rispondi solo con la frase da pronunciare.
+        response_variable: risposta_ai
+        continue_on_error: true
+      - variables:
+          saluto: >-
+            {% set txt = risposta_ai.data if risposta_ai is defined
+              and risposta_ai is mapping and risposta_ai.data is defined
+              and risposta_ai.data is string else '' %}
+            {% if txt | trim %}
+              {{ txt | trim }}
+            {% elif marco and enza %}
+              [warmly] Buongiorno Marco ed Enza! Vi auguro una splendida giornata!
+            {% elif marco %}
+              [warmly] Buongiorno Marco! Ti auguro una splendida giornata!
+            {% else %}
+              [warmly] Buongiorno Enza! Ti auguro una splendida giornata!
+            {% endif %}
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.hmh_ultimo_buongiorno
+        data:
+          value: "{{ oggi }}"
+      - action: tts.speak
+        target:
+          entity_id: tts.elevenlabs_text_to_speech
+        data:
+          media_player_entity_id: media_player.home_assistant_voice_speaker_02_media_player
+          message: "{{ saluto }}"
+          cache: false
+          options:
+            voice: EXAVITQu4vr4xnSDxMaL
+            model: eleven_v4_turbo
+      - delay: "00:00:02"
+      - wait_template: >-
+          {{ not is_state('media_player.home_assistant_voice_speaker_02_media_player', 'playing') }}
+        timeout: "00:00:45"
+        continue_on_timeout: true
+      - choose:
+          - conditions: "{{ eventi | count > 0 }}"
+            sequence:
+              - action: assist_satellite.ask_question
+                data:
+                  entity_id: assist_satellite.home_assistant_voice_speaker_02_assist_satellite
+                  preannounce: false
+                  question: >-
+                    {% if marco and enza %}
+                    Vi va di ascoltare gli appuntamenti di oggi?
+                    {% else %}
+                    Ti va di ascoltare gli appuntamenti di oggi?
+                    {% endif %}
+                  answers:
+                    - id: yes_answer
+                      sentences:
+                        - "Sì"
+                        - "Sì grazie"
+                        - "Certo"
+                        - "Va bene"
+                        - "Volentieri"
+                    - id: no_answer
+                      sentences:
+                        - "No"
+                        - "No grazie"
+                        - "Non ora"
+                response_variable: risposta
+              - if: "{{ risposta is defined and risposta.id | default('') == 'yes_answer' }}"
+                then:
+                  - action: assist_satellite.announce
+                    target:
+                      entity_id: assist_satellite.home_assistant_voice_speaker_02_assist_satellite
+                    data:
+                      preannounce: false
+                      message: >-
+                        {% set ns = namespace(items=[]) %}
+                        {% for ev in eventi %}
+                          {% set start = as_datetime(ev.start) %}
+                          {% set quando = 'tutto il giorno' if ev.start | string | length == 10
+                             else 'alle ' ~ start.strftime('%H:%M') %}
+                          {% set ns.items = ns.items + [quando ~ ', ' ~ ev.summary] %}
+                        {% endfor %}
+                        Ecco gli appuntamenti di oggi: {{ ns.items | join('; ') }}.
+automation:
+  - id: hmh_buongiorno_caffe
+    alias: "HMH: buongiorno dopo il caffè"
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.macchina_caffe_potenza
+        above: 300
+        for: "00:00:05"
+        id: caffe
+      - trigger: state
+        entity_id: input_boolean.hmh_buongiorno_test
+        to: "on"
+        id: test
+    actions:
+      - choose:
+          - conditions: "{{ trigger.id == 'caffe' }}"
+            sequence:
+              - wait_template: >-
+                  {{ states('sensor.macchina_caffe_potenza') | float(9999) < 20 }}
+                timeout: "00:20:00"
+                continue_on_timeout: false
+              - delay: "00:00:30"
+              - condition: template
+                value_template: >-
+                  {{ states('sensor.macchina_caffe_potenza') | float(9999) < 20 }}
+              - delay: "00:05:00"
+        default:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.hmh_buongiorno_test
+      - condition: template
+        value_template: >-
+          {{ state_attr('cover.reverse_tapparella_sala_calorifero',
+                        'current_position') | int(0) > 0 }}
+      - action: script.hmh_buongiorno_usa_agenda
