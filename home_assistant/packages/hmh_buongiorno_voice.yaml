@@ -1,4 +1,4 @@
-# HMH Buongiorno Voice - Sarah ElevenLabs
+# HMH Buongiorno Voice - Aura ElevenLabs
 # Richiede packages abilitati in Home Assistant.
 input_text:
   hmh_ultimo_buongiorno:
@@ -43,7 +43,10 @@ script:
             Sei la voce affettuosa della casa. Inventa un saluto mattutino
             originale e caloroso in italiano, massimo 45 parole.
             Marco a casa: {{ marco }}. Enza a casa: {{ enza }}.
-            Saluta per nome solo chi è presente. Oggi è {{ now().strftime('%d/%m/%Y') }}.
+            Saluta per nome solo chi è presente. Oggi è {{ now().strftime('%A %d %B %Y') }}.
+            Tutti i numeri nel testo pronunciato devono essere scritti
+            in lettere italiane, non in cifre. Nessuna parola inglese
+            nel parlato (i tag emozionali ElevenLabs sono consentiti).
             Usa da tre a cinque tag emozionali ElevenLabs distribuiti
             nel saluto, scegliendo tra [warmly], [cheerfully],
             [excited], [mischievously], [whispers], [laughs].
@@ -117,20 +120,51 @@ script:
                 response_variable: risposta
               - if: "{{ risposta is defined and risposta.id | default('') == 'yes_answer' }}"
                 then:
-                  - action: assist_satellite.announce
-                    target:
-                      entity_id: assist_satellite.home_assistant_voice_speaker_02_assist_satellite
-                    data:
-                      preannounce: false
-                      message: >-
+                  - variables:
+                      agenda_da_leggere: >-
+                        {%- macro numero(n) -%}
+                          {%- set u = ['zero','uno','due','tre','quattro','cinque',
+                            'sei','sette','otto','nove','dieci','undici','dodici',
+                            'tredici','quattordici','quindici','sedici','diciassette',
+                            'diciotto','diciannove'] -%}
+                          {%- set d = ['','','venti','trenta','quaranta',
+                            'cinquanta'] -%}
+                          {%- if n < 20 -%}
+                            {{- u[n] -}}
+                          {%- elif n % 10 == 0 -%}
+                            {{- d[n // 10] -}}
+                          {%- elif n % 10 in [1,8] -%}
+                            {{- d[n // 10][:-1] ~ u[n % 10] -}}
+                          {%- else -%}
+                            {{- d[n // 10] ~ u[n % 10] -}}
+                          {%- endif -%}
+                        {%- endmacro -%}
                         {% set ns = namespace(items=[]) %}
                         {% for ev in eventi %}
-                          {% set start = as_datetime(ev.start) %}
-                          {% set quando = 'tutto il giorno' if ev.start | string | length == 10
-                             else 'alle ' ~ start.strftime('%H:%M') %}
+                          {% if ev.start | string | length == 10 %}
+                            {% set quando = 'tutto il giorno' %}
+                          {% else %}
+                            {% set ora = as_datetime(ev.start) %}
+                            {% set hh = as_local(ora).hour %}
+                            {% set mm = as_local(ora).minute %}
+                            {% set quando = 'alle ' ~ numero(hh) ~
+                              (' in punto' if mm == 0 else ' e ' ~ numero(mm)) %}
+                          {% endif %}
                           {% set ns.items = ns.items + [quando ~ ', ' ~ ev.summary] %}
                         {% endfor %}
-                        Ecco gli appuntamenti di oggi: {{ ns.items | join('; ') }}.
+                        [warmly] Ecco gli appuntamenti di oggi:
+                        {{ ns.items | join('; ') }}.
+                  - action: tts.speak
+                    target:
+                      entity_id: tts.elevenlabs_text_to_speech
+                    data:
+                      media_player_entity_id: media_player.home_assistant_voice_speaker_02_media_player
+                      cache: false
+                      options:
+                        voice: oFfGNOowCXrKYgUrLSTS
+                        model: eleven_v4_turbo
+                      message: "{{ agenda_da_leggere }}"
+
 automation:
   - id: hmh_buongiorno_caffe
     alias: "HMH: buongiorno dopo il caffè"
