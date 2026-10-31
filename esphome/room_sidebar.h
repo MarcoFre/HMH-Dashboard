@@ -2938,13 +2938,7 @@ class HmhCalendar {
     const int next_y=today_year+(today_month==12?1:0);
     if(standby_next_year==next_y && standby_next_month==next_m)
       for(const auto &e:standby_next_events) consider(e);
-    /*
-      int y,m,d,hh,mm;bool has_time;
-      if(!parse_iso(e.start,y,m,d,hh,mm,has_time)) continue;
-      time_t ts=make_time(y,m,d,e.all_day?0:hh,e.all_day?0:mm,0);
-      if(start_day_diff(e)==0 && is_today_past(e)) continue;
-      if(!best || ts<best_ts){best=&e;best_ts=ts;}
-    }*/
+
     if(!best) return false;
     color=event_color(*best);
     text="Prossimo appuntamento\n"+event_line(*best);
