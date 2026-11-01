@@ -1,0 +1,46 @@
+# HMH - Intenti musicali
+intent_script:
+  PlayMusicMA:
+    description: >-
+      Riproduci musica e radio con Music Assistant. Usa query e media_kind;
+      target_player opzionale (cucina, camera, cameretta, tavolo, sala).
+    mode: queued
+    action:
+      - variables:
+          ricerca: "{{ query | default(name | default('', true), true) | string | trim }}"
+          tipo_media: >-
+            {% set k = media_kind | default('', true) | string | lower | trim %}
+            {% set q = query | default(name | default('', true), true) | string | lower %}
+            {{ k if k in ['radio', 'artist', 'album', 'track'] else ('radio' if 'radio' in q else 'track') }}
+          destinazione: >-
+            {{ target_player | default(area | default('cucina', true), true) | string | lower | trim }}
+      - variables:
+          player: >-
+            {% set m = {
+              'cucina': 'media_player.ha_voice_assist_o3_media_player_3',
+              'camera': 'media_player.ha_voice_assist_o2_ha_voice_assist_o2_speaker_2',
+              'cameretta': 'media_player.ha_voice_assist_o1_ha_voice_assist_o1_speaker_2',
+              'tavolo': 'media_player.home_assistant_voice_speaker_02_media_player_2',
+              'speaker': 'media_player.home_assistant_voice_speaker_02_media_player_2',
+              'sala': 'media_player.salotto_2',
+              'salotto': 'media_player.salotto_2'
+            } %}
+            {% set d = destinazione | trim %}
+            {{ m.get(d, d if d in m.values() else '') }}
+      - if:
+          - condition: template
+            value_template: "{{ not ricerca | trim or not player | trim }}"
+        then:
+          - stop: "Riproduzione non avviata: titolo o destinazione non valida."
+            error: true
+      - action: music_assistant.play_media
+        target:
+          entity_id: "{{ player | trim }}"
+        data:
+          media_id: "{{ ricerca | trim }}"
+          media_type: "{{ tipo_media | trim }}"
+          enqueue: replace
+          artist: "{{ artist | default('', true) | string | trim }}"
+    speech:
+      text: >-
+        Ok, riproduco {{ query | default(name | default('', true), true) }}.
