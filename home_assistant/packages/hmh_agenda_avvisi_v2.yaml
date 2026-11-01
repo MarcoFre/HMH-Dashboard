@@ -1,0 +1,96 @@
+# HMH Agenda - Avvisi appuntamenti e promemoria
+automation:
+  - id: hmh_agenda_appuntamento_10_minuti
+    alias: "HMH: appuntamento tra 10 minuti"
+    mode: queued
+    max: 20
+    triggers:
+      - trigger: calendar
+        entity_id: calendar.casa
+        event: start
+        offset: "-00:10:00"
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ not (trigger.calendar_event.all_day | default(false))
+             and '[HMH_PROMEMORIA]' not in
+             (trigger.calendar_event.description | default('', true) | string) }}
+    actions:
+      - variables:
+          titolo_evento: "{{ trigger.calendar_event.summary | default('Appuntamento', true) }}"
+      - action: notify.mobile_app_cellulare_marco
+        data:
+          title: "HMH - Appuntamento tra 10 minuti"
+          message: "Tra 10 minuti inizia: {{ titolo_evento }}."
+        continue_on_error: true
+      - if:
+          - condition: state
+            entity_id: input_boolean.notifiche_attive
+            state: "on"
+        then:
+          - action: script.hmh_audio_invia
+            data:
+              categoria: notifica
+              messaggio: >-
+                [warmly] Ti avviso: tra dieci minuti inizia
+                l'appuntamento {{ titolo_evento }}.
+            continue_on_error: true
+  - id: hmh_agenda_evento_inizio
+    alias: "HMH: appuntamento o promemoria all'orario"
+    mode: queued
+    max: 20
+    triggers:
+      - trigger: calendar
+        entity_id: calendar.casa
+        event: start
+        offset: "00:00:00"
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ not (trigger.calendar_event.all_day | default(false)) }}
+    actions:
+      - variables:
+          titolo_evento: "{{ trigger.calendar_event.summary | default('Evento', true) }}"
+          promemoria: >-
+            {{ '[HMH_PROMEMORIA]' in
+               (trigger.calendar_event.description | default('', true) | string) }}
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ promemoria }}"
+            sequence:
+              - action: notify.mobile_app_cellulare_marco
+                data:
+                  title: "HMH - Promemoria"
+                  message: "È il momento di: {{ titolo_evento }}."
+                continue_on_error: true
+              - if:
+                  - condition: state
+                    entity_id: input_boolean.notifiche_attive
+                    state: "on"
+                then:
+                  - action: script.hmh_audio_invia
+                    data:
+                      categoria: notifica
+                      messaggio: >-
+                        [warmly] Ti ricordo che è il momento di
+                        {{ titolo_evento }}.
+                    continue_on_error: true
+        default:
+          - action: notify.mobile_app_cellulare_marco
+            data:
+              title: "HMH - Appuntamento adesso"
+              message: "Inizia ora: {{ titolo_evento }}."
+            continue_on_error: true
+          - if:
+              - condition: state
+                entity_id: input_boolean.notifiche_attive
+                state: "on"
+            then:
+              - action: script.hmh_audio_invia
+                data:
+                  categoria: notifica
+                  messaggio: >-
+                    [cheerfully] È arrivato il momento dell'appuntamento:
+                    {{ titolo_evento }}.
+                continue_on_error: true
