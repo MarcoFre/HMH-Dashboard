@@ -1,0 +1,44 @@
+# HMH - Avviso appuntamenti 10 minuti prima
+# Package indipendente, non modificare il package Buongiorno.
+automation:
+  - id: hmh_agenda_avviso_10_minuti
+    alias: "HMH: appuntamento tra 10 minuti"
+    description: "Avvisa su cellulare e tramite HMH Audio prima degli appuntamenti di calendar.casa"
+    mode: queued
+    max: 20
+    triggers:
+      - trigger: calendar
+        entity_id: calendar.casa
+        event: start
+        offset: "-00:10:00"
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ not (trigger.calendar_event.all_day | default(false)) 
+             and '[HMH_PROMEMORIA]' not in
+             (trigger.calendar_event.description | default('', true) | string) }}
+    actions:
+      - variables:
+          titolo_evento: "{{ trigger.calendar_event.summary | default('Appuntamento', true) }}"
+          avviso_mobile: >-
+            Tra 10 minuti inizia: {{ titolo_evento }}.
+          avviso_audio: >-
+            [warmly] Attenzione, tra dieci minuti
+            inizia l'appuntamento: {{ titolo_evento }}.
+      # Messaggio al cellulare sempre, anche nel silenzio notturno.
+      - action: notify.mobile_app_cellulare_marco
+        data:
+          title: "HMH - Appuntamento imminente"
+          message: "{{ avviso_mobile }}"
+        continue_on_error: true
+      # Avviso vocale soltanto con notifiche ordinarie attive.
+      - if:
+          - condition: state
+            entity_id: input_boolean.notifiche_attive
+            state: "on"
+        then:
+          - action: script.hmh_audio_invia
+            data:
+              categoria: notifica
+              messaggio: "{{ avviso_audio }}"
+            continue_on_error: true
