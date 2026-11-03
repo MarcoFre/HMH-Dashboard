@@ -268,17 +268,41 @@ class DashboardCatalog(SensorEntity):
         area_items.sort(key=lambda item: (item["name"].casefold(), item["id"]))
         entity_items = []
         selected = set()
+        excluded_labeled = []
+        debug_ids = ("sensor.zhimi_mb3_3424_pm25",
+                     "sensor.zhimi_mb3_3424_temperature")
+        debug_registry = {}
+        for debug_id in debug_ids:
+            debug_entry = entities.async_get(debug_id)
+            debug_registry[debug_id] = {
+                "nel_registro": debug_entry is not None,
+                "label_ids": sorted(debug_entry.labels) if debug_entry else [],
+                "label_match": bool(debug_entry.labels & label_ids) if debug_entry else False,
+                "disabled": str(debug_entry.disabled_by) if debug_entry else None,
+                "area_id": debug_entry.area_id if debug_entry else None,
+                "device_id": debug_entry.device_id if debug_entry else None,
+                "stato_presente": self._hass.states.get(debug_id) is not None,
+            }
         for entry in entities.entities.values():
             domain = entry.entity_id.split(".", 1)[0]
             is_chip = domain in DOMAINS and bool(entry.labels & chip_ids)
-            if domain not in DOMAINS or entry.disabled_by is not None or not (entry.labels & label_ids or is_chip):
+            if not (entry.labels & label_ids or is_chip):
                 continue
-            if domain == "weather" and not is_chip: continue
+            if domain not in DOMAINS:
+                excluded_labeled.append({"id": entry.entity_id, "reason": "unsupported_domain"})
+                continue
+            if entry.disabled_by is not None:
+                excluded_labeled.append({"id": entry.entity_id, "reason": "disabled"})
+                continue
+            if domain == "weather" and not is_chip:
+                excluded_labeled.append({"id": entry.entity_id, "reason": "weather_not_chip"})
+                continue
             selected.add(entry.entity_id)
             area_id = entry.area_id
             if not area_id and entry.device_id and (device := devices.async_get(entry.device_id)):
                 area_id = device.area_id
             if not area_id or area_id not in areas.areas:
+                excluded_labeled.append({"id": entry.entity_id, "reason": "no_valid_area"})
                 continue
             device = devices.async_get(entry.device_id) if entry.device_id else None
             state = self._hass.states.get(entry.entity_id)
@@ -357,7 +381,6 @@ class DashboardCatalog(SensorEntity):
                 "color_supported": domain == "light" and bool(modes & COLOR_MODES),
             })
         # Purifiers are fans with a PM2.5 sensor on the same registered device.
-        consumed_pm = set()
         for item in entity_items:
             if not item["id"].startswith("fan.") or item.get("chip"): continue
             entry = entities.entities.get(item["id"])
@@ -380,24 +403,24 @@ class DashboardCatalog(SensorEntity):
                 eid, pm_state, pm_attrs = candidates[0]
                 item["pm25_state"] = pm_state.state if pm_state else "unavailable"
                 item["pm25_unit"] = pm_attrs.get("unit_of_measurement") or "µg/m³"
-                selected.add(eid)
-                # Preserve independently selected chips; otherwise avoid a duplicate sensor card.
-                if not any(e["id"] == eid and e.get("chip") for e in entity_items): consumed_pm.add(eid)
-        entity_items = [item for item in entity_items if item["id"] not in consumed_pm]
+                # PM2.5 remains a normal catalog entity ONLY if it has the
+                # HMH Dashboard label. The composite renderer owns deduplication.
+                # Do not add unlabelled candidates to selected/catalog.
+
         # Pair only unambiguous, dashboard-labelled entities from the same HA device and area.
         grouped = {}
         for item in entity_items:
             if item.get("_device"):
                 grouped.setdefault((item["_device"], item["area"]), []).append(item)
-        paired = set()
         for group in grouped.values():
             switches = [item for item in group if item["id"].startswith("switch.")]
             powers = [item for item in group if item["id"].startswith("sensor.") and item["device_class"] == "power" and not item.get("chip")]
             if len(switches) == 1 and len(powers) == 1:
                 switch, power = switches[0], powers[0]
                 switch.update(power_state=power["state"], power_unit=power["unit"], power_entity=power["id"])
-                paired.add(power["id"])
-        entity_items = [item for item in entity_items if item["id"] not in paired]
+                # Keep the labelled power sensor in the catalog as its own entity.
+                # The switch may show its reading too, but grouping/rendering
+                # must not silently discard a user-selected HA entity.
         # A registered device is one group, even across entity domains/categories.
         device_groups = {}
         for item in entity_items:
@@ -549,6 +572,12 @@ class DashboardCatalog(SensorEntity):
             "catalogo": "json:" + json.dumps({"areas": area_items}, ensure_ascii=False, separators=(",", ":")),
             "entita": "json:" + json.dumps({"entities": entity_items, "weather": weather}, ensure_ascii=False, separators=(",", ":")),
             "display_label": self._label,
+            "diagnostica_catalogo": {"pubblicate": len(entity_items),
+                "escluse_etichettate": excluded_labeled,
+                "pm25_cucina_presente": any(item["id"] == "sensor.zhimi_mb3_3424_pm25"
+                                           for item in entity_items),
+                "label_ids_configurati": sorted(label_ids),
+                "verifica_sensori": debug_registry},
             "storico": self._history_payload,
             "energia": self._energy_payload,
         }
